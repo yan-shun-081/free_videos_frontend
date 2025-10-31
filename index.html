@@ -74,11 +74,11 @@
       background: #0f172a;
     }
 
-    /* === 3D TRAIN ANIMATION === */
+    /* === SMALLER 3D TRAIN ANIMATION === */
     .train-container {
       position: relative;
       width: 100%;
-      height: 220px;
+      height: 140px;
       perspective: 1000px;
       overflow: hidden;
       background: linear-gradient(180deg, #0f172a 0%, #1e293b 80%, #111827 100%);
@@ -88,10 +88,10 @@
 
     .train-track {
       position: absolute;
-      bottom: 30px;
+      bottom: 20px;
       left: 0;
       width: 100%;
-      height: 4px;
+      height: 3px;
       background: repeating-linear-gradient(
         90deg,
         #60a5fa 0 20px,
@@ -106,7 +106,7 @@
 
     .train {
       position: absolute;
-      bottom: 50px;
+      bottom: 35px;
       left: -300px;
       display: flex;
       transform: rotateY(10deg);
@@ -120,39 +120,39 @@
     }
 
     .car {
-      width: 120px;
-      height: 70px;
+      width: 100px;
+      height: 55px;
       background: linear-gradient(to bottom right, #3b82f6, #2563eb);
-      margin: 0 6px;
+      margin: 0 5px;
       border-radius: 10px;
       position: relative;
-      box-shadow: 0 10px 20px rgba(37, 99, 235, 0.4);
+      box-shadow: 0 8px 15px rgba(37, 99, 235, 0.4);
       transform: skewX(-5deg);
     }
 
     .car::before {
       content: '';
       position: absolute;
-      top: 10px;
-      left: 10px;
-      width: 100px;
-      height: 20px;
+      top: 8px;
+      left: 8px;
+      width: 85px;
+      height: 16px;
       background: rgba(255, 255, 255, 0.3);
       border-radius: 5px;
     }
 
     .wheel {
       position: absolute;
-      bottom: -10px;
-      width: 20px;
-      height: 20px;
+      bottom: -8px;
+      width: 16px;
+      height: 16px;
       background: #1e293b;
       border: 3px solid #38bdf8;
       border-radius: 50%;
       animation: wheelSpin 0.5s linear infinite;
     }
-    .wheel.left { left: 10px; }
-    .wheel.right { right: 10px; }
+    .wheel.left { left: 8px; }
+    .wheel.right { right: 8px; }
 
     @keyframes wheelSpin {
       100% { transform: rotate(360deg); }
@@ -163,8 +163,8 @@
       h1 { font-size: 1.8rem; }
       h2 { font-size: 1.25rem; }
       iframe { height: 350px !important; }
-      .train-container { height: 170px; }
-      .car { width: 90px; height: 60px; }
+      .train-container { height: 110px; }
+      .car { width: 80px; height: 50px; }
     }
   </style>
 </head>
@@ -190,7 +190,6 @@
   <!-- SECTION 1: SEARCH & UPLOAD -->
   <section id="metadata" class="w-full max-w-5xl glass p-6 fade-in">
     <h2 class="text-2xl font-semibold text-blue-300 mb-4">🔍 Search & Upload Here</h2>
-
     <iframe src="free_videos_metadata_frontend.html" class="h-[450px] bg-slate-900"></iframe>
   </section>
 
@@ -198,8 +197,8 @@
   <section id="videos" class="w-full max-w-5xl glass p-6 fade-in">
     <h2 class="text-2xl font-semibold text-blue-300 mb-4">🚆 Enjoy the Journey of Videos</h2>
 
-    <!-- 3D Train Animation -->
-    <div class="train-container">
+    <!-- Compact 3D Train Animation -->
+    <div class="train-container mb-4">
       <div class="train-track"></div>
       <div class="train">
         <div class="car">
@@ -218,12 +217,12 @@
     </div>
 
     <!-- Embedded Video Display -->
-    <iframe src="free_videos_displaying_frontend.html" class="h-[500px] bg-slate-900 mt-4"></iframe>
+    <iframe src="free_videos_displaying_frontend.html" class="h-[500px] bg-slate-900"></iframe>
   </section>
 
   <!-- FOOTER -->
   <footer class="text-slate-500 text-sm mt-8 fade-in text-center pb-6">
-    <p>© 2025 Free Videos Content · Built with ❤️ by Your Team</p>
+    <p>© 2025 Free Videos Content · Built with ❤️ by <span class="text-blue-400 font-semibold">YAN</span></p>
   </footer>
 
 </body>
