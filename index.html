@@ -74,24 +74,24 @@
       background: #0f172a;
     }
 
-    /* === SMALLER 3D TRAIN ANIMATION === */
+    /* === ULTRA-SLIM TRAIN ANIMATION (0.7 cm ≈ 26px) === */
     .train-container {
       position: relative;
       width: 100%;
-      height: 140px;
+      height: 26px; /* ≈ 0.7 cm */
       perspective: 1000px;
       overflow: hidden;
       background: linear-gradient(180deg, #0f172a 0%, #1e293b 80%, #111827 100%);
-      border-radius: 1rem;
-      box-shadow: inset 0 0 40px rgba(59, 130, 246, 0.4);
+      border-radius: 0.75rem;
+      box-shadow: inset 0 0 20px rgba(59, 130, 246, 0.3);
     }
 
     .train-track {
       position: absolute;
-      bottom: 20px;
+      bottom: 5px;
       left: 0;
       width: 100%;
-      height: 3px;
+      height: 2px;
       background: repeating-linear-gradient(
         90deg,
         #60a5fa 0 20px,
@@ -106,53 +106,42 @@
 
     .train {
       position: absolute;
-      bottom: 35px;
-      left: -300px;
+      bottom: 8px;
+      left: -150px;
       display: flex;
-      transform: rotateY(10deg);
-      animation: trainMove 10s linear infinite;
+      transform: rotateY(8deg);
+      animation: trainMove 9s linear infinite;
     }
 
     @keyframes trainMove {
-      0% { left: -350px; }
-      50% { left: calc(100% - 150px); }
-      100% { left: -350px; }
+      0% { left: -160px; }
+      50% { left: calc(100% - 100px); }
+      100% { left: -160px; }
     }
 
     .car {
-      width: 100px;
-      height: 55px;
+      width: 60px;
+      height: 15px;
       background: linear-gradient(to bottom right, #3b82f6, #2563eb);
-      margin: 0 5px;
-      border-radius: 10px;
+      margin: 0 4px;
+      border-radius: 4px;
       position: relative;
-      box-shadow: 0 8px 15px rgba(37, 99, 235, 0.4);
+      box-shadow: 0 3px 8px rgba(37, 99, 235, 0.4);
       transform: skewX(-5deg);
-    }
-
-    .car::before {
-      content: '';
-      position: absolute;
-      top: 8px;
-      left: 8px;
-      width: 85px;
-      height: 16px;
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 5px;
     }
 
     .wheel {
       position: absolute;
-      bottom: -8px;
-      width: 16px;
-      height: 16px;
+      bottom: -4px;
+      width: 6px;
+      height: 6px;
       background: #1e293b;
-      border: 3px solid #38bdf8;
+      border: 2px solid #38bdf8;
       border-radius: 50%;
       animation: wheelSpin 0.5s linear infinite;
     }
-    .wheel.left { left: 8px; }
-    .wheel.right { right: 8px; }
+    .wheel.left { left: 5px; }
+    .wheel.right { right: 5px; }
 
     @keyframes wheelSpin {
       100% { transform: rotate(360deg); }
@@ -163,8 +152,8 @@
       h1 { font-size: 1.8rem; }
       h2 { font-size: 1.25rem; }
       iframe { height: 350px !important; }
-      .train-container { height: 110px; }
-      .car { width: 80px; height: 50px; }
+      .train-container { height: 22px; }
+      .car { width: 50px; height: 12px; }
     }
   </style>
 </head>
@@ -193,11 +182,11 @@
     <iframe src="free_videos_metadata_frontend.html" class="h-[450px] bg-slate-900"></iframe>
   </section>
 
-  <!-- SECTION 2: VIDEO DISPLAY + 3D TRAIN -->
+  <!-- SECTION 2: VIDEO DISPLAY + MINI TRAIN -->
   <section id="videos" class="w-full max-w-5xl glass p-6 fade-in">
     <h2 class="text-2xl font-semibold text-blue-300 mb-4">🚆 Enjoy the Journey of Videos</h2>
 
-    <!-- Compact 3D Train Animation -->
+    <!-- Ultra-Slim Train Animation -->
     <div class="train-container mb-4">
       <div class="train-track"></div>
       <div class="train">
