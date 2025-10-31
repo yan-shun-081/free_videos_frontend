@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Inline Video Queue</title>
+
+<style>
+:root{
+  --bg:#0f1724;
+  --card:#0b1220;
+  --muted:#9aa6b2;
+  --accent:#06b6d4;
+  --soft:#e6eef5;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  padding:0;
+  background:linear-gradient(180deg,#071025 0%, #071827 100%);
+  color:var(--soft);
+  font-family:Arial, Helvetica, sans-serif;
+}
+body{
+  padding:16px;
+  overflow-x:hidden;
+}
+
+/* Queue Container */
+.queue{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  overflow-y:auto;
+  max-height:100vh;
+}
+
+/* Item Card */
+.queue-item{
+  background:rgba(255,255,255,0.05);
+  border-radius:10px;
+  padding:10px;
+  cursor:pointer;
+  transition:0.15s, opacity 0.3s ease-in;
+  opacity:0;
+}
+.queue-item.visible{opacity:1;}
+.queue-item.active{
+  border:1px solid var(--accent);
+  box-shadow:0 6px 20px rgba(6,182,212,0.3);
+}
+
+/* Thumbnail */
+.thumb{
+  width:100%;
+  aspect-ratio:16/9;
+  border-radius:8px;
+  background:#000;
+  overflow:hidden;
+  background-size:cover;
+  background-position:center;
+}
+
+/* Metadata */
+.q-title{font-size:15px;font-weight:600;margin:6px 0 2px}
+.q-sub{font-size:12px;color:var(--muted)}
+.q-id{font-size:11px;color:var(--muted)}
+
+/* Controls */
+.controls{
+  display:flex;
+  justify-content:center;
+  gap:12px;
+  padding:14px 0;
+  position:sticky;
+  bottom:10px;
+}
+.btn{
+  padding:8px 14px;
+  border-radius:8px;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.2);
+  color:var(--soft);
+  cursor:pointer;
+  font-size:14px;
+}
+.btn:hover{
+  background:var(--accent);
+  color:#000;
+}
+
+/* Loader */
+.loader{
+  text-align:center;
+  padding:20px;
+  color:var(--muted);
+  font-size:14px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="queue" id="queueList">
+  <div class="loader" id="loader">Loading videos...</div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="prevBtn">Prev</button>
+  <button class="btn" id="nextBtn">Next</button>
+</div>
+
+<script>
+const BACKEND = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
+const STORAGE_KEY = 'clicked_ids';
+
+const queueList = document.getElementById('queueList');
+const loader = document.getElementById('loader');
+let videos = [];            // all videos from backend (stored temporarily)
+let displayedCount = 0;     // how many shown
+const BATCH_SIZE = 30;      // load 30 each time
+let currentIndex = 0;
+
+/* ---------- LocalStorage helpers ---------- */
+function getStoredIds(){
+  try{
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  }catch{return [];}
+}
+function store(id){
+  const ids = new Set(getStoredIds());
+  ids.add(id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
+}
+function clearStored(){ localStorage.removeItem(STORAGE_KEY); }
+
+/* ---------- Send stored clicks to backend ---------- */
+async function sendStoredToBackend(){
+  const ids = getStoredIds();
+  if(ids.length===0) return;
+  try{
+    await fetch(`${BACKEND}/clicked_videos`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({video_ids:ids})
+    });
+    console.log('Sent to backend:',ids);
+    clearStored();
+  }catch(err){
+    console.error('Failed to send ids:',err);
+  }
+}
+
+/* ---------- Load all videos once ---------- */
+async function loadVideos(){
+  loader.textContent = "Fetching videos...";
+  try{
+    const res = await fetch(BACKEND);
+    videos = await res.json();
+    loader.remove();
+    renderNextBatch(); // show first 30
+  }catch{
+    loader.textContent = "❌ Failed to load videos from backend";
+  }
+}
+
+/* ---------- Render next 30 videos ---------- */
+function renderNextBatch(){
+  const nextBatch = videos.slice(displayedCount, displayedCount + BATCH_SIZE);
+  displayedCount += nextBatch.length;
+
+  nextBatch.forEach((v,i)=>{
+    const card = document.createElement('div');
+    card.className = 'queue-item';
+    const absoluteIndex = (displayedCount - nextBatch.length) + i;
+    card.innerHTML = `
+      <div class="thumb" style="background-image:url('${v.archive_org_iframe_image_link||""}')"></div>
+      <div class="q-title">${v.title || "Untitled"}</div>
+      <div class="q-sub">By ${v.username || "Unknown"}</div>
+      <div class="q-id">ID: ${v.id || "?"}</div>
+    `;
+    card.onclick = () => playInline(absoluteIndex);
+    queueList.appendChild(card);
+    requestAnimationFrame(()=>card.classList.add('visible'));
+  });
+
+  if(displayedCount >= videos.length){
+    // end reached
+    const endMsg = document.createElement('div');
+    endMsg.className = 'loader';
+    endMsg.textContent = "🎉 All videos loaded";
+    queueList.appendChild(endMsg);
+  }
+}
+
+/* ---------- Scroll listener ---------- */
+queueList.addEventListener('scroll',()=>{
+  const bottomReached = queueList.scrollTop + queueList.clientHeight >= queueList.scrollHeight - 150;
+  if(bottomReached && displayedCount < videos.length){
+    renderNextBatch();
+  }
+});
+
+/* ---------- Play inline video ---------- */
+function playInline(i){
+  currentIndex = i;
+  const v = videos[i];
+  const items = document.querySelectorAll('.queue-item');
+
+  items.forEach((el,idx)=>{
+    el.classList.toggle('active', idx===i);
+    const thumb = el.querySelector('.thumb');
+    if(idx===i){
+      thumb.innerHTML = `
+        <video controls controlsList="nodownload" autoplay playsinline
+               style="width:100%;height:100%"
+               src="${v.mp4_link}" 
+               poster="${v.archive_org_iframe_image_link}">
+        </video>`;
+    }else{
+      thumb.innerHTML = '';
+      if(videos[idx]) thumb.style.backgroundImage = `url('${videos[idx].archive_org_iframe_image_link}')`;
+    }
+  });
+
+  queueList.children[i]?.scrollIntoView({behavior:'smooth',block:'center'});
+  if(v.id!=null) store(Number(v.id));
+}
+
+/* ---------- Prev/Next controls ---------- */
+prevBtn.onclick = () => {
+  if(videos.length>0) playInline((currentIndex-1+videos.length)%videos.length);
+};
+nextBtn.onclick = () => {
+  if(videos.length>0) playInline((currentIndex+1)%videos.length);
+};
+
+/* ---------- Init ---------- */
+(async ()=>{
+  await sendStoredToBackend();  // send old clicks
+  await loadVideos();           // fetch & display videos
+})();
+</script>
+
+</body>
+</html>

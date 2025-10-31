@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Archive Video Uploader</title>
+  <style>
+    :root {
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#60a5fa;
+      --muted:#94a3b8;
+      --text:#e6eef8;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body {
+      font-family:Inter,system-ui,Arial,sans-serif;
+      background:linear-gradient(180deg,#071024 0%,#07172a 100%);
+      color:var(--text);
+      min-height:100vh;
+      display:flex;
+      align-items:flex-start;
+      justify-content:center;
+      padding:24px;
+    }
+    .app{
+      width:100%;
+      max-width:900px;
+      background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));
+      border-radius:16px;
+      padding:20px;
+      border:1px solid rgba(255,255,255,0.03);
+      box-shadow:0 10px 30px rgba(2,6,23,0.6);
+    }
+    header{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .search{flex:1;display:flex;width:100%;max-width:600px}
+    .search input{
+      flex:1;
+      padding:12px 16px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.05);
+      background:rgba(255,255,255,0.02);
+      color:var(--text);
+      outline:none;
+      font-size:15px;
+    }
+    .search button{
+      margin-left:8px;
+      padding:10px 14px;
+      border-radius:10px;
+      border:none;
+      background:var(--accent);
+      color:#042033;
+      font-weight:600;
+      cursor:pointer;
+      transition:0.2s;
+    }
+    .search button:hover{opacity:0.9}
+    .btn{
+      padding:10px 14px;
+      border-radius:10px;
+      border:none;
+      background:rgba(255,255,255,0.03);
+      color:var(--text);
+      cursor:pointer;
+      transition:0.2s;
+    }
+    .btn:hover{background:rgba(255,255,255,0.08)}
+    .primary{background:var(--accent);color:#062235}
+    .small{font-size:13px;color:var(--muted)}
+    .page{display:none;margin-top:18px}
+    .page.active{display:block}
+    input, textarea{
+      width:100%;
+      padding:10px 12px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.04);
+      background:transparent;
+      color:var(--text);
+      outline:none;
+      font-size:15px;
+    }
+    textarea{min-height:80px;resize:vertical}
+    .row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .error{color:#ff8b8b;font-weight:600}
+    .notice{
+      background:rgba(255,255,255,0.02);
+      padding:10px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.02);
+      font-size:13px;
+    }
+    .preview{margin-top:12px;border-radius:10px;overflow:hidden;background:#000}
+    video{
+      width:100%;
+      height:auto;
+      display:block;
+      border-radius:10px;
+      pointer-events:auto;
+    }
+    video::-webkit-media-controls-enclosure { overflow:hidden; }
+    video::-webkit-media-controls-download-button { display:none !important; }
+    video::-internal-media-controls-download-button { display:none !important; }
+    video[controlslist] { controlslist: nodownload; }
+    .search-results{margin-top:24px}
+    .search-item{
+      margin-top:16px;
+      background:rgba(255,255,255,0.03);
+      border-radius:10px;
+      padding:14px;
+      transition:transform 0.2s;
+    }
+    .search-item:hover{transform:scale(1.01)}
+    .thumb{
+      width:100%;
+      border-radius:10px;
+      overflow:hidden;
+      cursor:pointer;
+    }
+    .thumb img{
+      width:100%;
+      display:block;
+      border-radius:10px;
+    }
+    .details{margin-top:8px;font-size:14px;line-height:1.5;word-wrap:break-word}
+    .details a{color:var(--accent);text-decoration:none;word-break:break-all}
+    .details a:hover{text-decoration:underline}
+    footer{display:none}
+    @media (max-width:768px){
+      body{padding:12px}
+      .app{padding:16px}
+      .row-2{grid-template-columns:1fr}
+      .search{flex-direction:column}
+      .search button{margin-left:0;margin-top:8px;width:100%}
+    }
+  </style>
+</head>
+<body>
+  <main class="app" role="main">
+    <header>
+      <div class="search">
+        <input id="globalSearch" placeholder="Search by id, title or username" aria-label="Search" />
+        <button id="searchBtn">Search</button>
+      </div>
+      <button id="openUpload" class="btn primary" style="min-width:120px;">Upload</button>
+    </header>
+
+    <section class="view">
+      <div class="notice" style="margin-top:14px">Click <strong>Upload</strong> to open uploader form. All fields are mandatory.</div>
+
+      <!-- Upload Form -->
+      <div id="uploadPage" class="page">
+        <h3 style="margin-top:16px;margin-bottom:10px">Upload to Archive</h3>
+        <form id="uploadForm" novalidate>
+          <label>Archive.org iframe / URL</label>
+          <textarea id="archiveVideo" placeholder="Paste full iframe or archive.org URL"></textarea>
+
+          <label>Archive.org image link</label>
+          <input id="archiveImage" type="text" placeholder="https://archive.org/...jpg" />
+
+          <label>Title</label>
+          <input id="title" type="text" placeholder="Video title" />
+
+          <div class="row-2">
+            <div>
+              <label>Link 1</label>
+              <input id="link1" type="text" placeholder="Any link 1" />
+            </div>
+            <div>
+              <label>Link 2</label>
+              <input id="link2" type="text" placeholder="Any link 2" />
+            </div>
+          </div>
+
+          <div class="row-2">
+            <div>
+              <label>Username</label>
+              <input id="username" type="text" placeholder="Uploader username" />
+            </div>
+            <div>
+              <label>Phone number</label>
+              <input id="phone" type="tel" placeholder="Phone number" />
+            </div>
+          </div>
+
+          <div class="meta small">All fields required. We'll auto-generate MP4 link.</div>
+
+          <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button id="previewBtn" type="button" class="btn">Preview MP4</button>
+            <button id="postBtn" type="submit" class="btn primary">Post</button>
+            <div id="formStatus" class="small" style="margin-left:8px;min-height:18px"></div>
+          </div>
+
+          <div id="previewArea" class="preview" style="display:none;margin-top:12px">
+            <video id="previewVideo" controls playsinline controlslist="nodownload"></video>
+          </div>
+        </form>
+      </div>
+
+      <!-- Search Results -->
+      <div id="searchResults" class="search-results"></div>
+    </section>
+  </main>
+
+  <script>
+  const BACKEND_UPLOAD = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/upload';
+  const BACKEND_SEARCH = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/search';
+  const BACKEND_SEND_IDS = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/increment-ads';
+
+  function extractArchiveId(input) {
+    if (!input) return null;
+    const iframeMatch = input.match(/src\s*=\s*"([^"]+)"/i);
+    const url = iframeMatch ? iframeMatch[1] : input.trim();
+    const clean = url.split('?')[0];
+    const patterns = [
+      /archive\.org\/embed\/([^\/\?\s]+)/i,
+      /archive\.org\/details\/([^\/\?\s]+)/i,
+      /archive\.org\/download\/([^\/\?\s]+)/i
+    ];
+    for (const p of patterns) {
+      const m = clean.match(p);
+      if (m && m[1]) return decodeURIComponent(m[1]);
+    }
+    return null;
+  }
+
+  async function getMp4FromMetadata(id) {
+    const res = await fetch(`https://archive.org/metadata/${id}`);
+    if (!res.ok) throw new Error('Metadata not found');
+    const data = await res.json();
+    const file = data?.files?.find(f => f.name.toLowerCase().endsWith('.mp4'));
+    if (!file) throw new Error('No MP4 found');
+    return `https://archive.org/download/${id}/${encodeURIComponent(file.name)}`;
+  }
+
+  // ✅ Local storage video tracking
+  const STORAGE_KEY = 'watched_videos';
+
+  function getStoredVideoIds() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function storeVideoId(id) {
+    if (!id) return;
+    let ids = getStoredVideoIds();
+    if (!ids.includes(id)) {
+      ids.push(id);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+      console.log('Stored unique video ID:', id);
+    } else {
+      console.log('Duplicate ignored:', id);
+    }
+  }
+
+  function clearStoredVideoIds() {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  let sendInProgress = false;
+  async function sendStoredVideoIds() {
+    if (sendInProgress) return;
+    const ids = [...new Set(getStoredVideoIds())];
+    if (ids.length === 0) return;
+    sendInProgress = true;
+    try {
+      const res = await fetch(BACKEND_SEND_IDS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_ids: ids })
+      });
+      if (res.ok) clearStoredVideoIds();
+    } catch (err) {
+      console.error('Error sending IDs:', err);
+    } finally {
+      sendInProgress = false;
+    }
+  }
+
+  window.addEventListener('load', () => setTimeout(sendStoredVideoIds, 400));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') setTimeout(sendStoredVideoIds, 250);
+  });
+
+  document.getElementById('openUpload').addEventListener('click', () => {
+    document.getElementById('uploadPage').classList.toggle('active');
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  });
+
+  document.getElementById('previewBtn').addEventListener('click', async () => {
+    const id = extractArchiveId(document.getElementById('archiveVideo').value);
+    const formStatus = document.getElementById('formStatus');
+    if (!id) return formStatus.innerHTML = '<span class="error">Invalid Archive.org link</span>';
+    try {
+      const mp4 = await getMp4FromMetadata(id);
+      document.getElementById('previewVideo').src = mp4;
+      document.getElementById('previewArea').style.display = 'block';
+      formStatus.textContent = 'Preview ready ✔️';
+    } catch (err) {
+      formStatus.innerHTML = `<span class="error">${err.message}</span>`;
+    }
+  });
+
+  // ✅ Upload handler
+  document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formStatus = document.getElementById('formStatus');
+    const archiveVideo = document.getElementById('archiveVideo').value.trim();
+    const archiveImage = document.getElementById('archiveImage').value.trim();
+    const title = document.getElementById('title').value.trim();
+    const link1 = document.getElementById('link1').value.trim();
+    const link2 = document.getElementById('link2').value.trim();
+    const username = document.getElementById('username').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+
+    if (![archiveVideo, archiveImage, title, link1, link2, username, phone].every(Boolean))
+      return formStatus.innerHTML = '<span class="error">All fields required.</span>';
+
+    if (!/^https?:\/\/(www\.)?archive\.org\//i.test(archiveImage)) {
+      return formStatus.innerHTML = '<span class="error">Image link must be from archive.org</span>';
+    }
+
+    const id = extractArchiveId(archiveVideo);
+    if (!id) return formStatus.innerHTML = '<span class="error">Invalid archive link.</span>';
+
+    try {
+      formStatus.textContent = 'Fetching MP4...';
+      const mp4_link = await getMp4FromMetadata(id);
+      const payload = {
+        mp4_link,
+        archive_org_iframe_image_link: archiveImage,
+        title,
+        link_1: link1,
+        link_2: link2,
+        username,
+        phone_number: phone
+      };
+      const res = await fetch(BACKEND_UPLOAD, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) formStatus.innerHTML = '<strong>✅ Uploaded successfully!</strong>';
+      else formStatus.innerHTML = `<span class="error">Upload failed: ${res.status}</span>`;
+    } catch (err) {
+      formStatus.innerHTML = `<span class="error">${err.message}</span>`;
+    }
+  });
+
+  document.getElementById('searchBtn').addEventListener('click', async () => {
+    const q = document.getElementById('globalSearch').value.trim();
+    const searchResults = document.getElementById('searchResults');
+    if (!q) return alert('Type id/title/username to search.');
+    searchResults.innerHTML = '<div class="small">Searching...</div>';
+    try {
+      const res = await fetch(BACKEND_SEARCH + '?search=' + encodeURIComponent(q));
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      const videos = Array.isArray(data) ? data : (data.id ? [data] : []);
+      if (videos.length === 0) {
+        searchResults.innerHTML = '<div class="small">No results found.</div>';
+        return;
+      }
+      searchResults.innerHTML = videos.map(v => `
+        <div class="search-item">
+          <div class="thumb" id="thumb-${v.id}">
+            <img src="${v.archive_org_iframe_image_link}" alt="Thumbnail" />
+          </div>
+          <div class="video" id="video-${v.id}" style="display:none;margin-top:12px">
+            <video src="${v.mp4_link}" controls playsinline controlslist="nodownload" data-video-id="${v.id}"></video>
+          </div>
+          <div class="details">
+            <strong>ID:</strong> ${v.id}<br>
+            <strong>Title:</strong> ${v.title}<br>
+            <strong>Link 1:</strong> <a href="${v.link_1}" target="_blank">${v.link_1}</a><br>
+            <strong>Link 2:</strong> <a href="${v.link_2}" target="_blank">${v.link_2}</a><br>
+            <strong>Username:</strong> ${v.username}
+          </div>
+        </div>
+      `).join('');
+
+      videos.forEach(v => {
+        const thumb = document.getElementById(`thumb-${v.id}`);
+        const videoEl = document.getElementById(`video-${v.id}`);
+        const videoTag = videoEl.querySelector("video");
+
+        thumb.addEventListener('click', () => {
+          document.querySelectorAll(".search-item .video").forEach(c => c.style.display = 'none');
+          document.querySelectorAll(".search-item .thumb").forEach(t => t.style.display = 'block');
+          thumb.style.display = 'none';
+          videoEl.style.display = 'block';
+        });
+
+        // Pause other videos on play
+        videoTag.addEventListener('play', () => {
+          document.querySelectorAll("video").forEach(vid => {
+            if (vid !== videoTag) {
+              try { vid.pause(); vid.currentTime = 0; } catch(e){}
+              const container = vid.closest('.video');
+              if (container) container.style.display = 'none';
+              const thumbDiv = container ? container.previousElementSibling : null;
+              if (thumbDiv) thumbDiv.style.display = 'block';
+            }
+          });
+        });
+
+        // ✅ Store unique ID only once
+        videoTag.addEventListener('playing', () => storeVideoId(v.id));
+      });
+    } catch (err) {
+      searchResults.innerHTML = `<div class="error">${err.message}</div>`;
+    }
+  });
+
+  // ✅ Global play listener (deduplication safe)
+  document.addEventListener('play', e => {
+    if (e.target && e.target.tagName === 'VIDEO') {
+      const vid = e.target.getAttribute('data-video-id') || e.target.src || null;
+      if (vid) storeVideoId(vid);
+    }
+  }, true);
+  </script>
+</body>
+</html>
