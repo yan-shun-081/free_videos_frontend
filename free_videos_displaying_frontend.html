@@ -65,6 +65,9 @@ body{
 .q-title{font-size:15px;font-weight:600;margin:6px 0 2px}
 .q-sub{font-size:12px;color:var(--muted)}
 .q-id{font-size:11px;color:var(--muted)}
+.q-link{font-size:12px;color:var(--soft); margin-top:4px}
+.q-link a{color:#4ecbff;text-decoration:none;}
+.q-link a:hover{text-decoration:underline;}
 
 /* Controls */
 .controls{
@@ -116,9 +119,9 @@ const STORAGE_KEY = 'clicked_ids';
 
 const queueList = document.getElementById('queueList');
 const loader = document.getElementById('loader');
-let videos = [];            // all videos from backend (stored temporarily)
-let displayedCount = 0;     // how many shown
-const BATCH_SIZE = 30;      // load 30 each time
+let videos = [];            
+let displayedCount = 0;     
+const BATCH_SIZE = 30;      
 let currentIndex = 0;
 
 /* ---------- LocalStorage helpers ---------- */
@@ -159,7 +162,7 @@ async function loadVideos(){
     const res = await fetch(BACKEND);
     videos = await res.json();
     loader.remove();
-    renderNextBatch(); // show first 30
+    renderNextBatch(); 
   }catch{
     loader.textContent = "❌ Failed to load videos from backend";
   }
@@ -179,6 +182,10 @@ function renderNextBatch(){
       <div class="q-title">${v.title || "Untitled"}</div>
       <div class="q-sub">By ${v.username || "Unknown"}</div>
       <div class="q-id">ID: ${v.id || "?"}</div>
+
+      <!-- CLICKABLE LINKS -->
+      <div class="q-link">Link 1: <a href="${v.link_1}" target="_blank">${v.link_1 || "No link"}</a></div>
+      <div class="q-link">Link 2: <a href="${v.link_2}" target="_blank">${v.link_2 || "No link"}</a></div>
     `;
     card.onclick = () => playInline(absoluteIndex);
     queueList.appendChild(card);
@@ -186,7 +193,6 @@ function renderNextBatch(){
   });
 
   if(displayedCount >= videos.length){
-    // end reached
     const endMsg = document.createElement('div');
     endMsg.className = 'loader';
     endMsg.textContent = "🎉 All videos loaded";
@@ -238,8 +244,8 @@ nextBtn.onclick = () => {
 
 /* ---------- Init ---------- */
 (async ()=>{
-  await sendStoredToBackend();  // send old clicks
-  await loadVideos();           // fetch & display videos
+  await sendStoredToBackend(); 
+  await loadVideos();          
 })();
 </script>
 
