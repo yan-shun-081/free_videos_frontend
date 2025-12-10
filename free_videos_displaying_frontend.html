@@ -208,7 +208,81 @@ queueList.addEventListener('scroll',()=>{
   }
 });
 
-/* ---------- Play inline video ---------- */
+/* ---------- Helper: detect Android bridge ---------- */
+function hasAndroidBridge(){
+  return (typeof Android !== 'undefined' && Android !== null);
+}
+
+/* ---------- Global callbacks expected to be called by native -----------------
+   Your WebAppInterface will call these JS functions:
+     - onAdPreloaded()           // ad cached and ready
+     - onAdFailedToPreload()     // preload failed
+     - onAdNotAvailable()        // no ad to show right now
+     - onAdCompleted(targetUrl)  // user watched the rewarded ad (native passes targetUrl)
+   --------------------------------------------------------------------------- */
+
+window.onAdPreloaded = function(){
+  console.log('onAdPreloaded()');
+};
+
+window.onAdFailedToPreload = function(){
+  console.warn('onAdFailedToPreload()');
+};
+
+window.onAdNotAvailable = function(){
+  console.warn('onAdNotAvailable() — resuming video (no web fallback).');
+  // Resume paused video if native reported no ad
+  try{
+    const active = document.querySelector('.queue-item.active');
+    if(active){
+      const v = active.querySelector('video');
+      if(v && v._wasPausedForAd){
+        v._wasPausedForAd = false;
+        v.play().catch(()=>{});
+      }
+    }
+  }catch(e){ console.error(e); }
+};
+
+window.onAdCompleted = function(targetUrl){
+  console.log('onAdCompleted() ->', targetUrl);
+
+  try{
+    const active = document.querySelector('.queue-item.active');
+    if(active){
+      const v = active.querySelector('video');
+      if(v && v._wasPausedForAd){
+        v._wasPausedForAd = false;
+        v.play().catch(()=>{});
+      }
+    }
+  }catch(e){ console.error(e); }
+
+  // Request native to preload the next ad (defensive)
+  try{
+    if(hasAndroidBridge() && typeof Android.preloadRewardedAd === 'function'){
+      Android.preloadRewardedAd();
+    } else if (hasAndroidBridge() && Android.preloadRewardedAd){
+      Android.preloadRewardedAd();
+    }
+  }catch(e){ console.warn('preload call failed', e); }
+
+  // If native passed a targetUrl, open it inside the WebView using native helper
+  try{
+    if (targetUrl && targetUrl !== 'null' && targetUrl !== '') {
+      if (hasAndroidBridge() && typeof Android.loadUrlInWebView === 'function') {
+        Android.loadUrlInWebView(targetUrl);
+      } else if (hasAndroidBridge() && Android.loadUrlInWebView) {
+        Android.loadUrlInWebView(targetUrl);
+      } else {
+        // As a graceful fallback (shouldn't happen in-app) open in same window
+        window.location.href = targetUrl;
+      }
+    }
+  }catch(e){ console.error('failed to open targetUrl', e); }
+};
+
+/* ---------- Play inline video (modified to call native ad request at 10s) ---------- */
 function playInline(i){
   currentIndex = i;
   const v = videos[i];
@@ -232,6 +306,62 @@ function playInline(i){
 
   queueList.children[i]?.scrollIntoView({behavior:'smooth',block:'center'});
   if(v.id!=null) store(Number(v.id));
+
+  // Attach timeupdate listener to active video to trigger ad at 10s
+  requestAnimationFrame(()=>{
+    const active = document.querySelector('.queue-item.active');
+    if(!active) return;
+    const video = active.querySelector('video');
+    if(!video) return;
+
+    // clear any previous flags on video
+    video._adRequested = video._adRequested || false;
+    video._wasPausedForAd = false;
+
+    // Helper to trigger ad for this video element
+    const triggerAdForVideo = () => {
+      if(video._adRequested) return;
+      video._adRequested = true;
+
+      // Pause and mark for resume after ad
+      try{
+        video._wasPausedForAd = true;
+        video.pause();
+      }catch(e){ console.warn('Could not pause video', e); }
+
+      // Ask native to show the rewarded ad and pass a targetUrl (optional)
+      // Here I pass the video's mp4_link as the targetUrl; change if you prefer another URL.
+      try{
+        if(hasAndroidBridge() && typeof Android.requestRewardedAd === 'function'){
+          Android.requestRewardedAd(video.currentSrc || video.src || '');
+          console.log('Requested rewarded ad from native (with targetUrl).');
+        } else if (hasAndroidBridge() && Android.requestRewardedAd){
+          Android.requestRewardedAd(video.currentSrc || video.src || '');
+          console.log('Requested rewarded ad from native (fallback call).');
+        } else {
+          console.warn('Android bridge not available; no ad will play and video will be resumed.');
+          // Resume immediately if native is not available
+          video._wasPausedForAd = false;
+          video.play().catch(()=>{});
+        }
+      }catch(e){
+        console.error('requestRewardedAd error', e);
+        video._wasPausedForAd = false;
+        video.play().catch(()=>{});
+      }
+    };
+
+    function onTimeUpdate(){
+      if(video.currentTime >= 10 && !video._adRequested){
+        triggerAdForVideo();
+      }
+    }
+
+    // Remove previous listeners if any
+    video.removeEventListener('timeupdate', video._timeupdateListener);
+    video._timeupdateListener = onTimeUpdate;
+    video.addEventListener('timeupdate', video._timeupdateListener);
+  });
 }
 
 /* ---------- Prev/Next controls ---------- */
@@ -245,7 +375,20 @@ nextBtn.onclick = () => {
 /* ---------- Init ---------- */
 (async ()=>{
   await sendStoredToBackend(); 
-  await loadVideos();          
+  await loadVideos();
+
+  // Request native to preload a rewarded ad when user enters the app (if bridge exists)
+  try{
+    if(hasAndroidBridge()){
+      if(typeof Android.preloadRewardedAd === 'function') Android.preloadRewardedAd();
+      else if (Android.preloadRewardedAd) Android.preloadRewardedAd();
+      console.log('Requested native to preload rewarded ad (init).');
+    } else {
+      console.log('Android bridge not detected on init (likely running in browser).');
+    }
+  }catch(e){
+    console.warn('preload request failed', e);
+  }
 })();
 </script>
 
