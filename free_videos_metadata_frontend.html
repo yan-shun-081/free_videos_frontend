@@ -209,96 +209,24 @@
   </main>
 
   <script>
+  /* -------------------------------------------------------------------------
+   *  Constants & simple helpers
+   * ----------------------------------------------------------------------- */
   const BACKEND_UPLOAD = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/upload';
   const BACKEND_SEARCH = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/search';
   const BACKEND_SEND_IDS = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/increment-ads';
+  const STORAGE_KEY = 'watched_videos';
 
-  // ✅ Ad milestones in seconds: 10s, 2min, 5min, 10min, 20min, 30min, 40min, 50min, 60min...
-  const AD_MILESTONES = [10, 120, 300, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 6000, 6600, 7200, 7800, 8400, 9000];
+  /* -------------------------------------------------------------------------
+   *  Global state for rewarded‑ad handling
+   * ----------------------------------------------------------------------- */
+  let currentAdVideo = null;                     // video that is paused for an ad
+  const AD_BASE_MILESTONES = [10, 120, 300, 600, 1200, 1800, 2400, 3000]; // up to 50 min
+  const AD_REPEAT_INTERVAL = 600;                // every 10 min after 50 min
 
-  // Track which milestones have been triggered per video
-  const videoAdState = new Map();
-  let currentAdVideo = null;
-
-  // Preload ad on page load
-  window.addEventListener('load', () => {
-    if (window.Android && typeof window.Android.preloadRewardedAd === 'function') {
-      try { window.Android.preloadRewardedAd(); } catch(e) { console.warn('Preload error:', e); }
-    }
-  });
-
-  // Ad callbacks from native
-  window.onAdPreloaded = function() {
-    console.log('✅ Rewarded ad preloaded');
-  };
-
-  window.onAdFailedToPreload = function() {
-    console.warn('⚠️ Ad failed to preload');
-  };
-
-  window.onAdNotAvailable = function() {
-    console.warn('⚠️ Ad not available');
-    if (currentAdVideo) {
-      try { currentAdVideo.play(); } catch(e) {}
-      currentAdVideo = null;
-    }
-  };
-
-  window.onAdCompleted = function() {
-    console.log('✅ Ad completed');
-    if (currentAdVideo) {
-      try { currentAdVideo.play(); } catch(e) {}
-      currentAdVideo = null;
-    }
-    // Preload next ad
-    if (window.Android && typeof window.Android.preloadRewardedAd === 'function') {
-      try { window.Android.preloadRewardedAd(); } catch(e) {}
-    }
-  };
-
-  function shouldShowAd(videoId, currentTime, phoneNumber) {
-    // Skip ads if phone_number is NULL or empty
-    if (!phoneNumber || phoneNumber === 'NULL' || phoneNumber === 'null' || phoneNumber.trim() === '') {
-      return false;
-    }
-
-    if (!videoAdState.has(videoId)) {
-      videoAdState.set(videoId, new Set());
-    }
-    const triggeredMilestones = videoAdState.get(videoId);
-
-    for (const milestone of AD_MILESTONES) {
-      if (currentTime >= milestone && !triggeredMilestones.has(milestone)) {
-        triggeredMilestones.add(milestone);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function requestAd(video) {
-    if (window.Android && typeof window.Android.requestRewardedAd === 'function') {
-      currentAdVideo = video;
-      video.pause();
-      try { window.Android.requestRewardedAd(); } catch(e) {
-        console.error('Ad request error:', e);
-        video.play();
-      }
-    }
-  }
-
-  function setupVideoAdTracking(video, videoData) {
-    const videoId = videoData.id;
-    const phoneNumber = videoData.phone_number;
-
-    video.addEventListener('timeupdate', function() {
-      const currentTime = video.currentTime;
-      if (shouldShowAd(videoId, currentTime, phoneNumber)) {
-        requestAd(video);
-      }
-    });
-  }
-
+  /* -------------------------------------------------------------------------
+   *  Utility functions
+   * ----------------------------------------------------------------------- */
   function extractArchiveId(input) {
     if (!input) return null;
     const iframeMatch = input.match(/src\s*=\s*"([^"]+)"/i);
@@ -325,9 +253,6 @@
     return `https://archive.org/download/${id}/${encodeURIComponent(file.name)}`;
   }
 
-  // ✅ Local storage video tracking
-  const STORAGE_KEY = 'watched_videos';
-
   function getStoredVideoIds() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -353,6 +278,9 @@
     localStorage.removeItem(STORAGE_KEY);
   }
 
+  /* -------------------------------------------------------------------------
+   *  Send stored IDs to backend (unchanged from original)
+   * ----------------------------------------------------------------------- */
   let sendInProgress = false;
   async function sendStoredVideoIds() {
     if (sendInProgress) return;
@@ -378,6 +306,101 @@
     if (document.visibilityState === 'visible') setTimeout(sendStoredVideoIds, 250);
   });
 
+  /* -------------------------------------------------------------------------
+   *  Rewarded‑ad native bridge callbacks (JS side)
+   * ----------------------------------------------------------------------- */
+  // Called by Android when a rewarded ad finishes loading
+  function onAdPreloaded() {
+    console.log('✅ Rewarded ad preloaded');
+  }
+
+  // Called by Android when a rewarded ad failed to load
+  function onAdFailedToPreload() {
+    console.warn('⚠️ Rewarded ad failed to preload');
+  }
+
+  // Called by Android when the ad cannot be shown
+  function onAdNotAvailable() {
+    console.warn('⚠️ Rewarded ad not available');
+    if (currentAdVideo) {
+      currentAdVideo.play();
+      currentAdVideo = null;
+    }
+  }
+
+  // Called by Android after the user watches the ad
+  // `url` is the optional URL the native side may pass back (we ignore it)
+  function onAdCompleted(url) {
+    console.log('✅ Rewarded ad completed', url);
+    if (currentAdVideo) {
+      currentAdVideo.play();
+      currentAdVideo = null;
+    }
+    // Pre‑load the next ad for the next request
+    if (window.Android && typeof Android.preloadRewardedAd === 'function') {
+      Android.preloadRewardedAd();
+    }
+  }
+
+  // Native side can push the Android device ID to the page
+  function setAndroidId(id) {
+    console.log('Received Android ID from native code:', id);
+  }
+
+  /* -------------------------------------------------------------------------
+   *  Helper that creates / updates the per‑video ad‑state machine
+   * ----------------------------------------------------------------------- */
+  function setupRewardedAdTracking(video) {
+    // Phone number may be empty, null or the string "NULL"
+    const phoneNumber = video.dataset.phoneNumber;
+    if (!phoneNumber || phoneNumber === 'NULL' || phoneNumber === 'null') {
+      // No ads for this video
+      return;
+    }
+
+    // Create a simple state holder on the video element itself
+    if (!video._adState) {
+      video._adState = {
+        milestones: AD_BASE_MILESTONES.slice(), // copy
+        repeatInterval: AD_REPEAT_INTERVAL,
+        nextIdx: 0
+      };
+    }
+
+    const state = video._adState;
+
+    video.addEventListener('timeupdate', () => {
+      const current = Math.floor(video.currentTime);
+      let target;
+
+      if (state.nextIdx < state.milestones.length) {
+        target = state.milestones[state.nextIdx];
+      } else {
+        // After the last hard‑coded milestone keep showing ads every repeatInterval seconds
+        const extraSteps = state.nextIdx - state.milestones.length + 1;
+        target = state.milestones[state.milestones.length - 1] + extraSteps * state.repeatInterval;
+      }
+
+      if (current >= target) {
+        // Move to next milestone so we never fire twice for the same threshold
+        state.nextIdx++;
+
+        // Pause the video and ask native code to show a rewarded ad
+        if (window.Android && typeof Android.requestRewardedAd === 'function') {
+          currentAdVideo = video;
+          video.pause();
+          // Pass the video ID (or any URL you prefer) – native side just needs a non‑empty string
+          Android.requestRewardedAd(video.dataset.videoId);
+        } else {
+          console.warn('Android bridge not available – cannot request rewarded ad');
+        }
+      }
+    });
+  }
+
+  /* -------------------------------------------------------------------------
+   *  UI interactions (upload, preview, etc.)
+   * ----------------------------------------------------------------------- */
   document.getElementById('openUpload').addEventListener('click', () => {
     document.getElementById('uploadPage').classList.toggle('active');
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
@@ -397,7 +420,7 @@
     }
   });
 
-  // ✅ Upload handler
+  // Upload handler (unchanged apart from a tiny refactor)
   document.getElementById('uploadForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const formStatus = document.getElementById('formStatus');
@@ -443,11 +466,15 @@
     }
   });
 
+  /* -------------------------------------------------------------------------
+   *  Search & video rendering
+   * ----------------------------------------------------------------------- */
   document.getElementById('searchBtn').addEventListener('click', async () => {
     const q = document.getElementById('globalSearch').value.trim();
     const searchResults = document.getElementById('searchResults');
     if (!q) return alert('Type id/title/username to search.');
     searchResults.innerHTML = '<div class="small">Searching...</div>';
+
     try {
       const res = await fetch(BACKEND_SEARCH + '?search=' + encodeURIComponent(q));
       if (!res.ok) throw new Error('Search failed');
@@ -457,13 +484,22 @@
         searchResults.innerHTML = '<div class="small">No results found.</div>';
         return;
       }
+
+      // Build HTML for each video
       searchResults.innerHTML = videos.map(v => `
         <div class="search-item">
           <div class="thumb" id="thumb-${v.id}">
             <img src="${v.archive_org_iframe_image_link}" alt="Thumbnail" />
           </div>
           <div class="video" id="video-${v.id}" style="display:none;margin-top:12px">
-            <video src="${v.mp4_link}" controls playsinline controlslist="nodownload" data-video-id="${v.id}" data-phone="${v.phone_number || ''}"></video>
+            <video
+              src="${v.mp4_link}"
+              controls
+              playsinline
+              controlslist="nodownload"
+              data-video-id="${v.id}"
+              data-phone-number="${v.phone_number ? v.phone_number : ''}"
+            ></video>
           </div>
           <div class="details">
             <strong>ID:</strong> ${v.id}<br>
@@ -475,25 +511,24 @@
         </div>
       `).join('');
 
+      // Attach listeners for each rendered video
       videos.forEach(v => {
-        const thumb = document.getElementById(`thumb-${v.id}`);
+        const thumb   = document.getElementById(`thumb-${v.id}`);
         const videoEl = document.getElementById(`video-${v.id}`);
-        const videoTag = videoEl.querySelector("video");
+        const video   = videoEl.querySelector('video');
 
-        // Setup ad tracking for this video
-        setupVideoAdTracking(videoTag, v);
-
+        // Show video when thumbnail is clicked
         thumb.addEventListener('click', () => {
-          document.querySelectorAll(".search-item .video").forEach(c => c.style.display = 'none');
-          document.querySelectorAll(".search-item .thumb").forEach(t => t.style.display = 'block');
+          document.querySelectorAll('.search-item .video').forEach(c => c.style.display = 'none');
+          document.querySelectorAll('.search-item .thumb').forEach(t => t.style.display = 'block');
           thumb.style.display = 'none';
           videoEl.style.display = 'block';
         });
 
-        // Pause other videos on play
-        videoTag.addEventListener('play', () => {
-          document.querySelectorAll("video").forEach(vid => {
-            if (vid !== videoTag) {
+        // Pause all other videos when a new one starts playing
+        video.addEventListener('play', () => {
+          document.querySelectorAll('video').forEach(vid => {
+            if (vid !== video) {
               try { vid.pause(); vid.currentTime = 0; } catch(e){}
               const container = vid.closest('.video');
               if (container) container.style.display = 'none';
@@ -503,21 +538,40 @@
           });
         });
 
-        // ✅ Store unique ID only once
-        videoTag.addEventListener('playing', () => storeVideoId(v.id));
+        // Store video ID for analytics (unchanged)
+        video.addEventListener('playing', () => storeVideoId(v.id));
+
+        // ---- NEW ---- Rewarded‑ad tracking per video
+        setupRewardedAdTracking(video);
       });
     } catch (err) {
       searchResults.innerHTML = `<div class="error">${err.message}</div>`;
     }
   });
 
-  // ✅ Global play listener (deduplication safe)
+  /* -------------------------------------------------------------------------
+   *  Global play listener – keep the original ID‑storing behaviour
+   * ----------------------------------------------------------------------- */
   document.addEventListener('play', e => {
     if (e.target && e.target.tagName === 'VIDEO') {
       const vid = e.target.getAttribute('data-video-id') || e.target.src || null;
       if (vid) storeVideoId(vid);
     }
   }, true);
+
+  /* -------------------------------------------------------------------------
+   *  Initial native bridge actions (pre‑load ad, ask for Android ID)
+   * ----------------------------------------------------------------------- */
+  window.addEventListener('load', () => {
+    // Pre‑load a rewarded ad for the first time
+    if (window.Android && typeof Android.preloadRewardedAd === 'function') {
+      Android.preloadRewardedAd();
+    }
+    // (Optional) ask the native side for the device ID
+    if (window.Android && typeof Android.getAndroidId === 'function') {
+      Android.getAndroidId();
+    }
+  });
   </script>
 </body>
 </html>
