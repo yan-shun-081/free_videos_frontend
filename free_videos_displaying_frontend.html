@@ -117,6 +117,9 @@ body{
 const BACKEND = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
 const STORAGE_KEY = 'clicked_ids';
 
+/* Ad checkpoints in seconds: 10s, 2min, 5min, 10min, 20min, 30min, 40min, 50min, 60min... */
+const AD_CHECKPOINTS = [10, 120, 300, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 6000, 6600, 7200];
+
 const queueList = document.getElementById('queueList');
 const loader = document.getElementById('loader');
 let videos = [];            
@@ -177,6 +180,7 @@ function renderNextBatch(){
     const card = document.createElement('div');
     card.className = 'queue-item';
     const absoluteIndex = (displayedCount - nextBatch.length) + i;
+    // phone_number is intentionally NOT displayed
     card.innerHTML = `
       <div class="thumb" style="background-image:url('${v.archive_org_iframe_image_link||""}')"></div>
       <div class="q-title">${v.title || "Untitled"}</div>
@@ -211,6 +215,11 @@ queueList.addEventListener('scroll',()=>{
 /* ---------- Helper: detect Android bridge ---------- */
 function hasAndroidBridge(){
   return (typeof Android !== 'undefined' && Android !== null);
+}
+
+/* ---------- Helper: check if video should show ads ---------- */
+function shouldShowAds(videoData){
+  return videoData.phone_number != null && videoData.phone_number !== '' && videoData.phone_number !== 'NULL';
 }
 
 /* ---------- Global callbacks expected to be called by native -----------------
@@ -282,7 +291,7 @@ window.onAdCompleted = function(targetUrl){
   }catch(e){ console.error('failed to open targetUrl', e); }
 };
 
-/* ---------- Play inline video (modified to call native ad request at 10s) ---------- */
+/* ---------- Play inline video (with multiple ad checkpoints) ---------- */
 function playInline(i){
   currentIndex = i;
   const v = videos[i];
@@ -307,34 +316,33 @@ function playInline(i){
   queueList.children[i]?.scrollIntoView({behavior:'smooth',block:'center'});
   if(v.id!=null) store(Number(v.id));
 
-  // Attach timeupdate listener to active video to trigger ad at 10s
+  // Attach timeupdate listener to active video for ad checkpoints
   requestAnimationFrame(()=>{
     const active = document.querySelector('.queue-item.active');
     if(!active) return;
     const video = active.querySelector('video');
     if(!video) return;
 
-    // clear any previous flags on video
-    video._adRequested = video._adRequested || false;
+    // Initialize checkpoint tracking Set for this video
+    video._triggeredCheckpoints = new Set();
     video._wasPausedForAd = false;
+
+    // Check if this video should show ads (phone_number is not null)
+    const adsEnabled = shouldShowAds(v);
 
     // Helper to trigger ad for this video element
     const triggerAdForVideo = () => {
-      if(video._adRequested) return;
-      video._adRequested = true;
-
       // Pause and mark for resume after ad
       try{
         video._wasPausedForAd = true;
         video.pause();
       }catch(e){ console.warn('Could not pause video', e); }
 
-      // Ask native to show the rewarded ad and pass a targetUrl (optional)
-      // Here I pass the video's mp4_link as the targetUrl; change if you prefer another URL.
+      // Ask native to show the rewarded ad
       try{
         if(hasAndroidBridge() && typeof Android.requestRewardedAd === 'function'){
           Android.requestRewardedAd(video.currentSrc || video.src || '');
-          console.log('Requested rewarded ad from native (with targetUrl).');
+          console.log('Requested rewarded ad from native.');
         } else if (hasAndroidBridge() && Android.requestRewardedAd){
           Android.requestRewardedAd(video.currentSrc || video.src || '');
           console.log('Requested rewarded ad from native (fallback call).');
@@ -352,13 +360,23 @@ function playInline(i){
     };
 
     function onTimeUpdate(){
-      if(video.currentTime >= 10 && !video._adRequested){
-        triggerAdForVideo();
+      // Skip ad logic entirely if phone_number is null
+      if(!adsEnabled) return;
+
+      // Check each checkpoint
+      for(const checkpoint of AD_CHECKPOINTS){
+        if(video.currentTime >= checkpoint && !video._triggeredCheckpoints.has(checkpoint)){
+          video._triggeredCheckpoints.add(checkpoint);
+          triggerAdForVideo();
+          break; // Only trigger one ad at a time
+        }
       }
     }
 
     // Remove previous listeners if any
-    video.removeEventListener('timeupdate', video._timeupdateListener);
+    if(video._timeupdateListener){
+      video.removeEventListener('timeupdate', video._timeupdateListener);
+    }
     video._timeupdateListener = onTimeUpdate;
     video.addEventListener('timeupdate', video._timeupdateListener);
   });
