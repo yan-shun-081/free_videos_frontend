@@ -117,15 +117,15 @@ body{
 const BACKEND = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
 const STORAGE_KEY = 'clicked_ids';
 
-/* Ad checkpoints in seconds: 10s, 2min, 5min, 10min, 20min, 30min, 40min, 50min, 60min... */
-const AD_CHECKPOINTS = [10, 120, 300, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 6000, 6600, 7200];
-
 const queueList = document.getElementById('queueList');
 const loader = document.getElementById('loader');
 let videos = [];            
 let displayedCount = 0;     
 const BATCH_SIZE = 30;      
 let currentIndex = 0;
+
+// Ad timing intervals in seconds: 10s, 2min, 5min, 10min, 20min, 30min, 40min, 50min, 60min...
+const AD_INTERVALS = [10, 120, 300, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 6000, 6600, 7200];
 
 /* ---------- LocalStorage helpers ---------- */
 function getStoredIds(){
@@ -171,6 +171,16 @@ async function loadVideos(){
   }
 }
 
+/* ---------- Check if ads should be played for this video ---------- */
+function shouldPlayAds(videoData){
+  // If phone_number is NULL, undefined, empty string, or "null"/"NULL" string - don't play ads
+  const phoneNumber = videoData.phone_number;
+  if(phoneNumber === null || phoneNumber === undefined || phoneNumber === '' || phoneNumber === 'null' || phoneNumber === 'NULL'){
+    return false;
+  }
+  return true;
+}
+
 /* ---------- Render next 30 videos ---------- */
 function renderNextBatch(){
   const nextBatch = videos.slice(displayedCount, displayedCount + BATCH_SIZE);
@@ -180,7 +190,10 @@ function renderNextBatch(){
     const card = document.createElement('div');
     card.className = 'queue-item';
     const absoluteIndex = (displayedCount - nextBatch.length) + i;
-    // phone_number is intentionally NOT displayed
+    
+    // phone_number is stored in dataset but NOT displayed
+    card.dataset.phoneNumber = v.phone_number || '';
+    
     card.innerHTML = `
       <div class="thumb" style="background-image:url('${v.archive_org_iframe_image_link||""}')"></div>
       <div class="q-title">${v.title || "Untitled"}</div>
@@ -215,11 +228,6 @@ queueList.addEventListener('scroll',()=>{
 /* ---------- Helper: detect Android bridge ---------- */
 function hasAndroidBridge(){
   return (typeof Android !== 'undefined' && Android !== null);
-}
-
-/* ---------- Helper: check if video should show ads ---------- */
-function shouldShowAds(videoData){
-  return videoData.phone_number != null && videoData.phone_number !== '' && videoData.phone_number !== 'NULL';
 }
 
 /* ---------- Global callbacks expected to be called by native -----------------
@@ -291,7 +299,7 @@ window.onAdCompleted = function(targetUrl){
   }catch(e){ console.error('failed to open targetUrl', e); }
 };
 
-/* ---------- Play inline video (with multiple ad checkpoints) ---------- */
+/* ---------- Play inline video (with ad logic at multiple intervals) ---------- */
 function playInline(i){
   currentIndex = i;
   const v = videos[i];
@@ -316,22 +324,35 @@ function playInline(i){
   queueList.children[i]?.scrollIntoView({behavior:'smooth',block:'center'});
   if(v.id!=null) store(Number(v.id));
 
-  // Attach timeupdate listener to active video for ad checkpoints
+  // Check if ads should be played for this video (based on phone_number)
+  const adsEnabled = shouldPlayAds(v);
+  console.log('Ads enabled for this video:', adsEnabled, '| phone_number:', v.phone_number);
+
+  // Attach timeupdate listener to active video to trigger ad at intervals
   requestAnimationFrame(()=>{
     const active = document.querySelector('.queue-item.active');
     if(!active) return;
     const video = active.querySelector('video');
     if(!video) return;
 
-    // Initialize checkpoint tracking Set for this video
-    video._triggeredCheckpoints = new Set();
+    // Track which ad intervals have been triggered for this video
+    video._triggeredIntervals = new Set();
     video._wasPausedForAd = false;
-
-    // Check if this video should show ads (phone_number is not null)
-    const adsEnabled = shouldShowAds(v);
+    video._adsEnabled = adsEnabled;
 
     // Helper to trigger ad for this video element
-    const triggerAdForVideo = () => {
+    const triggerAdForVideo = (intervalSeconds) => {
+      // Skip if ads are disabled for this video (phone_number is NULL)
+      if(!video._adsEnabled){
+        console.log('Ads disabled for this video (phone_number is NULL), skipping ad at', intervalSeconds, 'seconds');
+        return;
+      }
+      
+      if(video._triggeredIntervals.has(intervalSeconds)) return;
+      video._triggeredIntervals.add(intervalSeconds);
+
+      console.log('Triggering ad at interval:', intervalSeconds, 'seconds');
+
       // Pause and mark for resume after ad
       try{
         video._wasPausedForAd = true;
@@ -360,14 +381,12 @@ function playInline(i){
     };
 
     function onTimeUpdate(){
-      // Skip ad logic entirely if phone_number is null
-      if(!adsEnabled) return;
-
-      // Check each checkpoint
-      for(const checkpoint of AD_CHECKPOINTS){
-        if(video.currentTime >= checkpoint && !video._triggeredCheckpoints.has(checkpoint)){
-          video._triggeredCheckpoints.add(checkpoint);
-          triggerAdForVideo();
+      const currentTime = video.currentTime;
+      
+      // Check each interval and trigger ad when video time passes it
+      for(const interval of AD_INTERVALS){
+        if(currentTime >= interval && currentTime < interval + 1 && !video._triggeredIntervals.has(interval)){
+          triggerAdForVideo(interval);
           break; // Only trigger one ad at a time
         }
       }
