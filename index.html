@@ -1,240 +1,414 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Free Videos Content</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Inline Video Queue</title>
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root{
+  --bg:#0f1724;
+  --card:#0b1220;
+  --muted:#9aa6b2;
+  --accent:#06b6d4;
+  --soft:#e6eef5;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  padding:0;
+  background:linear-gradient(180deg,#071025 0%, #071827 100%);
+  color:var(--soft);
+  font-family:Arial, Helvetica, sans-serif;
+}
+body{
+  padding:16px;
+  overflow-x:hidden;
+}
 
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Pacifico&display=swap" rel="stylesheet">
+/* Queue Container */
+.queue{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  overflow-y:auto;
+  max-height:100vh;
+}
 
-  <style>
-    body {
-      font-family: 'Poppins', sans-serif;
-      background: radial-gradient(circle at top left, #0f172a, #1e293b);
-      color: #f1f5f9;
-      min-height: 100vh;
-      overflow-x: hidden;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      scroll-behavior: smooth;
-    }
+/* Item Card */
+.queue-item{
+  background:rgba(255,255,255,0.05);
+  border-radius:10px;
+  padding:10px;
+  cursor:pointer;
+  transition:0.15s, opacity 0.3s ease-in;
+  opacity:0;
+}
+.queue-item.visible{opacity:1;}
+.queue-item.active{
+  border:1px solid var(--accent);
+  box-shadow:0 6px 20px rgba(6,182,212,0.3);
+}
 
-    /* Glassmorphism */
-    .glass {
-      background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 1rem;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-      transition: all 0.3s ease-in-out;
-    }
-    .glass:hover {
-      transform: scale(1.01);
-      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
-    }
+/* Thumbnail */
+.thumb{
+  width:100%;
+  aspect-ratio:16/9;
+  border-radius:8px;
+  background:#000;
+  overflow:hidden;
+  background-size:cover;
+  background-position:center;
+}
 
-    /* Fade & glow effects */
-    .fade-in {
-      opacity: 0;
-      transform: translateY(15px);
-      animation: fadeIn 0.9s ease-in-out forwards;
-    }
-    @keyframes fadeIn {
-      to { opacity: 1; transform: translateY(0); }
-    }
+/* Metadata */
+.q-title{font-size:15px;font-weight:600;margin:6px 0 2px}
+.q-sub{font-size:12px;color:var(--muted)}
+.q-id{font-size:11px;color:var(--muted)}
+.q-link{font-size:12px;color:var(--soft); margin-top:4px}
+.q-link a{color:#4ecbff;text-decoration:none;}
+.q-link a:hover{text-decoration:underline;}
 
-    .glow-text {
-      text-shadow: 0 0 10px #38bdf8, 0 0 20px #3b82f6, 0 0 40px #2563eb;
-      animation: glow 3s ease-in-out infinite alternate;
-    }
-    @keyframes glow {
-      from { text-shadow: 0 0 10px #3b82f6; }
-      to { text-shadow: 0 0 25px #60a5fa, 0 0 50px #3b82f6; }
-    }
+/* Controls */
+.controls{
+  display:flex;
+  justify-content:center;
+  gap:12px;
+  padding:14px 0;
+  position:sticky;
+  bottom:10px;
+}
+.btn{
+  padding:8px 14px;
+  border-radius:8px;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.2);
+  color:var(--soft);
+  cursor:pointer;
+  font-size:14px;
+}
+.btn:hover{
+  background:var(--accent);
+  color:#000;
+}
 
-    .moving-text {
-      animation: moveText 5s linear infinite;
-    }
-    @keyframes moveText {
-      0% { transform: translateX(-10px); }
-      50% { transform: translateX(10px); }
-      100% { transform: translateX(-10px); }
-    }
-
-    iframe {
-      width: 100%;
-      border: none;
-      border-radius: 1rem;
-      overflow: hidden;
-      background: #0f172a;
-    }
-
-    /* === ULTRA-SLIM TRAIN ANIMATION (0.7 cm ≈ 26px) === */
-    .train-container {
-      position: relative;
-      width: 100%;
-      height: 26px; /* ≈ 0.7 cm */
-      perspective: 1000px;
-      overflow: hidden;
-      background: linear-gradient(180deg, #0f172a 0%, #1e293b 80%, #111827 100%);
-      border-radius: 0.75rem;
-      box-shadow: inset 0 0 20px rgba(59, 130, 246, 0.3);
-    }
-
-    .train-track {
-      position: absolute;
-      bottom: 5px;
-      left: 0;
-      width: 100%;
-      height: 2px;
-      background: repeating-linear-gradient(
-        90deg,
-        #60a5fa 0 20px,
-        transparent 20px 40px
-      );
-      animation: trackMove 1.5s linear infinite;
-    }
-    @keyframes trackMove {
-      from { background-position-x: 0; }
-      to { background-position-x: 40px; }
-    }
-
-    .train {
-      position: absolute;
-      bottom: 8px;
-      left: -150px;
-      display: flex;
-      transform: rotateY(8deg);
-      animation: trainMove 9s linear infinite;
-    }
-
-    @keyframes trainMove {
-      0% { left: -160px; }
-      50% { left: calc(100% - 100px); }
-      100% { left: -160px; }
-    }
-
-    .car {
-      width: 60px;
-      height: 15px;
-      background: linear-gradient(to bottom right, #3b82f6, #2563eb);
-      margin: 0 4px;
-      border-radius: 4px;
-      position: relative;
-      box-shadow: 0 3px 8px rgba(37, 99, 235, 0.4);
-      transform: skewX(-5deg);
-    }
-
-    .wheel {
-      position: absolute;
-      bottom: -4px;
-      width: 6px;
-      height: 6px;
-      background: #1e293b;
-      border: 2px solid #38bdf8;
-      border-radius: 50%;
-      animation: wheelSpin 0.5s linear infinite;
-    }
-    .wheel.left { left: 5px; }
-    .wheel.right { right: 5px; }
-
-    @keyframes wheelSpin {
-      100% { transform: rotate(360deg); }
-    }
-
-    /* MOBILE */
-    @media (max-width: 640px) {
-      h1 { font-size: 1.8rem; }
-      h2 { font-size: 1.25rem; }
-      iframe { height: 350px !important; }
-      .train-container { height: 22px; }
-      .car { width: 50px; height: 12px; }
-    }
-  </style>
+/* Loader */
+.loader{
+  text-align:center;
+  padding:20px;
+  color:var(--muted);
+  font-size:14px;
+}
+</style>
 </head>
 
-<body class="p-4 sm:p-6 space-y-8">
+<body>
 
-  <!-- HEADER -->
-  <header class="text-center fade-in mt-6">
-    <h1 class="text-4xl sm:text-5xl font-bold text-blue-400 glow-text flex justify-center items-center space-x-2">
-      <span>🎬</span>
-      <span style="font-family:'Pacifico', cursive;">Free Videos Content</span>
-      <span>💫</span>
-    </h1>
+<div class="queue" id="queueList">
+  <div class="loader" id="loader">Loading videos...</div>
+</div>
 
-    <p class="text-slate-400 text-sm sm:text-base mt-3 moving-text">
-      💖 Your satisfaction and privacy are our priority. Thanks for trusting our app!
-    </p>
-    <p class="text-blue-300 text-base sm:text-lg mt-2 glow-text">
-      Discover, Explore, and Watch Free Videos 🎥
-    </p>
-  </header>
+<div class="controls">
+  <button class="btn" id="prevBtn">Prev</button>
+  <button class="btn" id="nextBtn">Next</button>
+</div>
 
-  <!-- SECTION 1: SEARCH & UPLOAD -->
-  <section id="metadata" class="w-full max-w-5xl glass p-6 fade-in">
-    <h2 class="text-2xl font-semibold text-blue-300 mb-4">🔍 Search & Upload Here</h2>
+<script>
+const BACKEND = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
+const STORAGE_KEY = 'clicked_ids';
 
-    <!-- FULLSCREEN BUTTON -->
-    <div class="flex justify-end mb-2">
-      <button onclick="openFullscreen('metaFrame')" class="text-blue-300 hover:text-white text-xl">⛶</button>
-    </div>
+/* Ad checkpoints in seconds: 10s, 2min, 5min, 10min, 20min, 30min, 40min, 50min, 60min... */
+const AD_CHECKPOINTS = [10, 120, 300, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 6000, 6600, 7200];
 
-    <iframe id="metaFrame" src="free_videos_metadata_frontend.html" class="h-[450px] bg-slate-900"></iframe>
-  </section>
+const queueList = document.getElementById('queueList');
+const loader = document.getElementById('loader');
+let videos = [];            
+let displayedCount = 0;     
+const BATCH_SIZE = 30;      
+let currentIndex = 0;
 
-  <!-- SECTION 2: VIDEO DISPLAY + MINI TRAIN -->
-  <section id="videos" class="w-full max-w-5xl glass p-6 fade-in">
-    <h2 class="text-2xl font-semibold text-blue-300 mb-4">🚆 Enjoy the Journey of Videos</h2>
+/* ---------- LocalStorage helpers ---------- */
+function getStoredIds(){
+  try{
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  }catch{return [];}
+}
+function store(id){
+  const ids = new Set(getStoredIds());
+  ids.add(id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
+}
+function clearStored(){ localStorage.removeItem(STORAGE_KEY); }
 
-    <!-- Ultra-Slim Train Animation -->
-    <div class="train-container mb-4">
-      <div class="train-track"></div>
-      <div class="train">
-        <div class="car">
-          <div class="wheel left"></div>
-          <div class="wheel right"></div>
-        </div>
-        <div class="car">
-          <div class="wheel left"></div>
-          <div class="wheel right"></div>
-        </div>
-        <div class="car">
-          <div class="wheel left"></div>
-          <div class="wheel right"></div>
-        </div>
-      </div>
-    </div>
+/* ---------- Send stored clicks to backend ---------- */
+async function sendStoredToBackend(){
+  const ids = getStoredIds();
+  if(ids.length===0) return;
+  try{
+    await fetch(`${BACKEND}/clicked_videos`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({video_ids:ids})
+    });
+    console.log('Sent to backend:',ids);
+    clearStored();
+  }catch(err){
+    console.error('Failed to send ids:',err);
+  }
+}
 
-    <!-- FULLSCREEN BUTTON -->
-    <div class="flex justify-end mb-2">
-      <button onclick="openFullscreen('videoFrame')" class="text-blue-300 hover:text-white text-xl">⛶</button>
-    </div>
+/* ---------- Load all videos once ---------- */
+async function loadVideos(){
+  loader.textContent = "Fetching videos...";
+  try{
+    const res = await fetch(BACKEND);
+    videos = await res.json();
+    loader.remove();
+    renderNextBatch(); 
+  }catch{
+    loader.textContent = "❌ Failed to load videos from backend";
+  }
+}
 
-    <!-- Embedded Video Display -->
-    <iframe id="videoFrame" src="free_videos_displaying_frontend.html" class="h-[500px] bg-slate-900"></iframe>
-  </section>
+/* ---------- Render next 30 videos ---------- */
+function renderNextBatch(){
+  const nextBatch = videos.slice(displayedCount, displayedCount + BATCH_SIZE);
+  displayedCount += nextBatch.length;
 
-  <!-- FOOTER -->
-  <footer class="text-slate-500 text-sm mt-8 fade-in text-center pb-6">
-    <p>© 2025 Free Videos Content · Built with ❤️ by <span class="text-blue-400 font-semibold">YAN</span></p>
-  </footer>
+  nextBatch.forEach((v,i)=>{
+    const card = document.createElement('div');
+    card.className = 'queue-item';
+    const absoluteIndex = (displayedCount - nextBatch.length) + i;
+    // phone_number is intentionally NOT displayed
+    card.innerHTML = `
+      <div class="thumb" style="background-image:url('${v.archive_org_iframe_image_link||""}')"></div>
+      <div class="q-title">${v.title || "Untitled"}</div>
+      <div class="q-sub">By ${v.username || "Unknown"}</div>
+      <div class="q-id">ID: ${v.id || "?"}</div>
 
+      <!-- CLICKABLE LINKS -->
+      <div class="q-link">Link 1: <a href="${v.link_1}" target="_blank">${v.link_1 || "No link"}</a></div>
+      <div class="q-link">Link 2: <a href="${v.link_2}" target="_blank">${v.link_2 || "No link"}</a></div>
+    `;
+    card.onclick = () => playInline(absoluteIndex);
+    queueList.appendChild(card);
+    requestAnimationFrame(()=>card.classList.add('visible'));
+  });
 
-  <!-- FULLSCREEN SCRIPT -->
-  <script>
-    function openFullscreen(id) {
-      const iframe = document.getElementById(id);
-      if (iframe.requestFullscreen) iframe.requestFullscreen();
-      else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
-      else if (iframe.msRequestFullscreen) iframe.msRequestFullscreen();
+  if(displayedCount >= videos.length){
+    const endMsg = document.createElement('div');
+    endMsg.className = 'loader';
+    endMsg.textContent = "🎉 All videos loaded";
+    queueList.appendChild(endMsg);
+  }
+}
+
+/* ---------- Scroll listener ---------- */
+queueList.addEventListener('scroll',()=>{
+  const bottomReached = queueList.scrollTop + queueList.clientHeight >= queueList.scrollHeight - 150;
+  if(bottomReached && displayedCount < videos.length){
+    renderNextBatch();
+  }
+});
+
+/* ---------- Helper: detect Android bridge ---------- */
+function hasAndroidBridge(){
+  return (typeof Android !== 'undefined' && Android !== null);
+}
+
+/* ---------- Helper: check if video should show ads ---------- */
+function shouldShowAds(videoData){
+  return videoData.phone_number != null && videoData.phone_number !== '' && videoData.phone_number !== 'NULL';
+}
+
+/* ---------- Global callbacks expected to be called by native -----------------
+   Your WebAppInterface will call these JS functions:
+     - onAdPreloaded()           // ad cached and ready
+     - onAdFailedToPreload()     // preload failed
+     - onAdNotAvailable()        // no ad to show right now
+     - onAdCompleted(targetUrl)  // user watched the rewarded ad (native passes targetUrl)
+   --------------------------------------------------------------------------- */
+
+window.onAdPreloaded = function(){
+  console.log('onAdPreloaded()');
+};
+
+window.onAdFailedToPreload = function(){
+  console.warn('onAdFailedToPreload()');
+};
+
+window.onAdNotAvailable = function(){
+  console.warn('onAdNotAvailable() — resuming video (no web fallback).');
+  // Resume paused video if native reported no ad
+  try{
+    const active = document.querySelector('.queue-item.active');
+    if(active){
+      const v = active.querySelector('video');
+      if(v && v._wasPausedForAd){
+        v._wasPausedForAd = false;
+        v.play().catch(()=>{});
+      }
     }
-  </script>
+  }catch(e){ console.error(e); }
+};
+
+window.onAdCompleted = function(targetUrl){
+  console.log('onAdCompleted() ->', targetUrl);
+
+  try{
+    const active = document.querySelector('.queue-item.active');
+    if(active){
+      const v = active.querySelector('video');
+      if(v && v._wasPausedForAd){
+        v._wasPausedForAd = false;
+        v.play().catch(()=>{});
+      }
+    }
+  }catch(e){ console.error(e); }
+
+  // Request native to preload the next ad (defensive)
+  try{
+    if(hasAndroidBridge() && typeof Android.preloadRewardedAd === 'function'){
+      Android.preloadRewardedAd();
+    } else if (hasAndroidBridge() && Android.preloadRewardedAd){
+      Android.preloadRewardedAd();
+    }
+  }catch(e){ console.warn('preload call failed', e); }
+
+  // If native passed a targetUrl, open it inside the WebView using native helper
+  try{
+    if (targetUrl && targetUrl !== 'null' && targetUrl !== '') {
+      if (hasAndroidBridge() && typeof Android.loadUrlInWebView === 'function') {
+        Android.loadUrlInWebView(targetUrl);
+      } else if (hasAndroidBridge() && Android.loadUrlInWebView) {
+        Android.loadUrlInWebView(targetUrl);
+      } else {
+        // As a graceful fallback (shouldn't happen in-app) open in same window
+        window.location.href = targetUrl;
+      }
+    }
+  }catch(e){ console.error('failed to open targetUrl', e); }
+};
+
+/* ---------- Play inline video (with multiple ad checkpoints) ---------- */
+function playInline(i){
+  currentIndex = i;
+  const v = videos[i];
+  const items = document.querySelectorAll('.queue-item');
+
+  items.forEach((el,idx)=>{
+    el.classList.toggle('active', idx===i);
+    const thumb = el.querySelector('.thumb');
+    if(idx===i){
+      thumb.innerHTML = `
+        <video controls controlsList="nodownload" autoplay playsinline
+               style="width:100%;height:100%"
+               src="${v.mp4_link}" 
+               poster="${v.archive_org_iframe_image_link}">
+        </video>`;
+    }else{
+      thumb.innerHTML = '';
+      if(videos[idx]) thumb.style.backgroundImage = `url('${videos[idx].archive_org_iframe_image_link}')`;
+    }
+  });
+
+  queueList.children[i]?.scrollIntoView({behavior:'smooth',block:'center'});
+  if(v.id!=null) store(Number(v.id));
+
+  // Attach timeupdate listener to active video for ad checkpoints
+  requestAnimationFrame(()=>{
+    const active = document.querySelector('.queue-item.active');
+    if(!active) return;
+    const video = active.querySelector('video');
+    if(!video) return;
+
+    // Initialize checkpoint tracking Set for this video
+    video._triggeredCheckpoints = new Set();
+    video._wasPausedForAd = false;
+
+    // Check if this video should show ads (phone_number is not null)
+    const adsEnabled = shouldShowAds(v);
+
+    // Helper to trigger ad for this video element
+    const triggerAdForVideo = () => {
+      // Pause and mark for resume after ad
+      try{
+        video._wasPausedForAd = true;
+        video.pause();
+      }catch(e){ console.warn('Could not pause video', e); }
+
+      // Ask native to show the rewarded ad
+      try{
+        if(hasAndroidBridge() && typeof Android.requestRewardedAd === 'function'){
+          Android.requestRewardedAd(video.currentSrc || video.src || '');
+          console.log('Requested rewarded ad from native.');
+        } else if (hasAndroidBridge() && Android.requestRewardedAd){
+          Android.requestRewardedAd(video.currentSrc || video.src || '');
+          console.log('Requested rewarded ad from native (fallback call).');
+        } else {
+          console.warn('Android bridge not available; no ad will play and video will be resumed.');
+          // Resume immediately if native is not available
+          video._wasPausedForAd = false;
+          video.play().catch(()=>{});
+        }
+      }catch(e){
+        console.error('requestRewardedAd error', e);
+        video._wasPausedForAd = false;
+        video.play().catch(()=>{});
+      }
+    };
+
+    function onTimeUpdate(){
+      // Skip ad logic entirely if phone_number is null
+      if(!adsEnabled) return;
+
+      // Check each checkpoint
+      for(const checkpoint of AD_CHECKPOINTS){
+        if(video.currentTime >= checkpoint && !video._triggeredCheckpoints.has(checkpoint)){
+          video._triggeredCheckpoints.add(checkpoint);
+          triggerAdForVideo();
+          break; // Only trigger one ad at a time
+        }
+      }
+    }
+
+    // Remove previous listeners if any
+    if(video._timeupdateListener){
+      video.removeEventListener('timeupdate', video._timeupdateListener);
+    }
+    video._timeupdateListener = onTimeUpdate;
+    video.addEventListener('timeupdate', video._timeupdateListener);
+  });
+}
+
+/* ---------- Prev/Next controls ---------- */
+prevBtn.onclick = () => {
+  if(videos.length>0) playInline((currentIndex-1+videos.length)%videos.length);
+};
+nextBtn.onclick = () => {
+  if(videos.length>0) playInline((currentIndex+1)%videos.length);
+};
+
+/* ---------- Init ---------- */
+(async ()=>{
+  await sendStoredToBackend(); 
+  await loadVideos();
+
+  // Request native to preload a rewarded ad when user enters the app (if bridge exists)
+  try{
+    if(hasAndroidBridge()){
+      if(typeof Android.preloadRewardedAd === 'function') Android.preloadRewardedAd();
+      else if (Android.preloadRewardedAd) Android.preloadRewardedAd();
+      console.log('Requested native to preload rewarded ad (init).');
+    } else {
+      console.log('Android bridge not detected on init (likely running in browser).');
+    }
+  }catch(e){
+    console.warn('preload request failed', e);
+  }
+})();
+</script>
 
 </body>
 </html>
