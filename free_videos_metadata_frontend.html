@@ -213,148 +213,90 @@
   const BACKEND_SEARCH = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/search';
   const BACKEND_SEND_IDS = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/increment-ads';
 
-  // ✅ Rewarded Ad Milestones (in seconds): 10s, 2min, 5min, then every 10min
-  const AD_MILESTONES = [10, 120, 300];
-  for (let t = 600; t <= 36000; t += 600) AD_MILESTONES.push(t);
+  // ✅ Ad milestones in seconds: 10s, 2min, 5min, 10min, 20min, 30min, 40min, 50min, 60min...
+  const AD_MILESTONES = [10, 120, 300, 600, 1200, 1800, 2400, 3000, 3600, 4200, 4800, 5400, 6000, 6600, 7200, 7800, 8400, 9000];
 
-  // ✅ Track triggered milestones per video to avoid duplicate triggers
+  // Track which milestones have been triggered per video
   const videoAdState = new Map();
+  let currentAdVideo = null;
 
-  // ✅ Current video being shown ad for (to resume after ad)
-  let currentAdVideoId = null;
-  let currentAdVideoElement = null;
-
-  // ✅ Check if Android native bridge is available
-  function isAndroidAvailable() {
-    return typeof Android !== 'undefined' && Android !== null;
-  }
-
-  // ✅ Preload rewarded ad via Android native bridge
-  function preloadRewardedAd() {
-    if (isAndroidAvailable()) {
-      try {
-        Android.preloadRewardedAd();
-        console.log('[Android] Requested to preload rewarded ad');
-      } catch (e) {
-        console.error('[Android] Error preloading ad:', e);
-      }
-    } else {
-      console.log('[Android] Native bridge not available');
+  // Preload ad on page load
+  window.addEventListener('load', () => {
+    if (window.Android && typeof window.Android.preloadRewardedAd === 'function') {
+      try { window.Android.preloadRewardedAd(); } catch(e) { console.warn('Preload error:', e); }
     }
-  }
+  });
 
-  // ✅ Show rewarded ad via Android native bridge
-  function showRewardedAd(videoId, videoElement) {
-    if (isAndroidAvailable()) {
-      try {
-        currentAdVideoId = videoId;
-        currentAdVideoElement = videoElement;
-        
-        // Pause video before showing ad
-        if (videoElement && !videoElement.paused) {
-          videoElement.pause();
-        }
-        
-        Android.requestRewardedAd();
-        console.log('[Android] Requested to show rewarded ad for video:', videoId);
-      } catch (e) {
-        console.error('[Android] Error showing ad:', e);
-        resumeVideoAfterAd();
-      }
-    } else {
-      console.log('[Android] Native bridge not available for showing ad');
-    }
-  }
-
-  // ✅ Resume video after ad completes or fails
-  function resumeVideoAfterAd() {
-    if (currentAdVideoElement) {
-      try {
-        currentAdVideoElement.play().catch(e => console.log('Could not auto-resume video:', e));
-        console.log('[Android] Resumed video after ad');
-      } catch (e) {
-        console.error('[Android] Error resuming video:', e);
-      }
-    }
-    currentAdVideoId = null;
-    currentAdVideoElement = null;
-  }
-
-  // ✅ Native callbacks - called by Android native code
-
-  // Called when ad is preloaded successfully
+  // Ad callbacks from native
   window.onAdPreloaded = function() {
-    console.log('[Android] Rewarded ad preloaded successfully');
+    console.log('✅ Rewarded ad preloaded');
   };
 
-  // Called when ad fails to preload
   window.onAdFailedToPreload = function() {
-    console.log('[Android] Rewarded ad failed to preload, will retry');
-    // Retry preload after delay
-    setTimeout(preloadRewardedAd, 5000);
+    console.warn('⚠️ Ad failed to preload');
   };
 
-  // Called when user completes watching the ad
-  window.onAdCompleted = function(targetUrl) {
-    console.log('[Android] Rewarded ad completed, targetUrl:', targetUrl);
-    resumeVideoAfterAd();
-    // Native code auto-preloads next ad, but we can also request
-  };
-
-  // Called when ad is not available
   window.onAdNotAvailable = function() {
-    console.log('[Android] Rewarded ad not available');
-    resumeVideoAfterAd();
+    console.warn('⚠️ Ad not available');
+    if (currentAdVideo) {
+      try { currentAdVideo.play(); } catch(e) {}
+      currentAdVideo = null;
+    }
   };
 
-  // ✅ Initialize: Request native to preload first rewarded ad
-  function initRewardedAds() {
-    setTimeout(preloadRewardedAd, 1000);
+  window.onAdCompleted = function() {
+    console.log('✅ Ad completed');
+    if (currentAdVideo) {
+      try { currentAdVideo.play(); } catch(e) {}
+      currentAdVideo = null;
+    }
+    // Preload next ad
+    if (window.Android && typeof window.Android.preloadRewardedAd === 'function') {
+      try { window.Android.preloadRewardedAd(); } catch(e) {}
+    }
+  };
+
+  function shouldShowAd(videoId, currentTime, phoneNumber) {
+    // Skip ads if phone_number is NULL or empty
+    if (!phoneNumber || phoneNumber === 'NULL' || phoneNumber === 'null' || phoneNumber.trim() === '') {
+      return false;
+    }
+
+    if (!videoAdState.has(videoId)) {
+      videoAdState.set(videoId, new Set());
+    }
+    const triggeredMilestones = videoAdState.get(videoId);
+
+    for (const milestone of AD_MILESTONES) {
+      if (currentTime >= milestone && !triggeredMilestones.has(milestone)) {
+        triggeredMilestones.add(milestone);
+        return true;
+      }
+    }
+    return false;
   }
 
-  // ✅ Setup video ad tracking
-  function setupVideoAdTracking(videoElement, videoId, phoneNumber) {
-    // Skip ad tracking if phone_number is NULL, undefined, empty, or string "NULL"/"null"
-    if (!phoneNumber || phoneNumber === 'NULL' || phoneNumber === 'null' || String(phoneNumber).trim() === '') {
-      console.log('[Ads] Skipping ad tracking for video:', videoId, '- phone_number is NULL or empty');
-      return;
-    }
-
-    // Initialize state for this video
-    if (!videoAdState.has(videoId)) {
-      videoAdState.set(videoId, {
-        triggeredMilestones: new Set(),
-        phoneNumber: phoneNumber
-      });
-    }
-
-    const state = videoAdState.get(videoId);
-
-    // Remove existing listener if any
-    if (videoElement._adTimeUpdateHandler) {
-      videoElement.removeEventListener('timeupdate', videoElement._adTimeUpdateHandler);
-    }
-
-    // Create timeupdate handler
-    videoElement._adTimeUpdateHandler = function() {
-      const currentTime = Math.floor(videoElement.currentTime);
-      
-      for (const milestone of AD_MILESTONES) {
-        // Check if we've reached this milestone and haven't triggered it yet
-        if (currentTime >= milestone && !state.triggeredMilestones.has(milestone)) {
-          state.triggeredMilestones.add(milestone);
-          console.log('[Ads] Milestone reached:', milestone, 'seconds for video:', videoId);
-          
-          // Show rewarded ad via native bridge
-          showRewardedAd(videoId, videoElement);
-          
-          break; // Only trigger one milestone at a time
-        }
+  function requestAd(video) {
+    if (window.Android && typeof window.Android.requestRewardedAd === 'function') {
+      currentAdVideo = video;
+      video.pause();
+      try { window.Android.requestRewardedAd(); } catch(e) {
+        console.error('Ad request error:', e);
+        video.play();
       }
-    };
+    }
+  }
 
-    videoElement.addEventListener('timeupdate', videoElement._adTimeUpdateHandler);
-    console.log('[Ads] Ad tracking enabled for video:', videoId);
+  function setupVideoAdTracking(video, videoData) {
+    const videoId = videoData.id;
+    const phoneNumber = videoData.phone_number;
+
+    video.addEventListener('timeupdate', function() {
+      const currentTime = video.currentTime;
+      if (shouldShowAd(videoId, currentTime, phoneNumber)) {
+        requestAd(video);
+      }
+    });
   }
 
   function extractArchiveId(input) {
@@ -431,10 +373,7 @@
     }
   }
 
-  window.addEventListener('load', () => {
-    setTimeout(sendStoredVideoIds, 400);
-    initRewardedAds();
-  });
+  window.addEventListener('load', () => setTimeout(sendStoredVideoIds, 400));
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') setTimeout(sendStoredVideoIds, 250);
   });
@@ -524,7 +463,7 @@
             <img src="${v.archive_org_iframe_image_link}" alt="Thumbnail" />
           </div>
           <div class="video" id="video-${v.id}" style="display:none;margin-top:12px">
-            <video src="${v.mp4_link}" controls playsinline controlslist="nodownload" data-video-id="${v.id}" data-phone-number="${v.phone_number || ''}"></video>
+            <video src="${v.mp4_link}" controls playsinline controlslist="nodownload" data-video-id="${v.id}" data-phone="${v.phone_number || ''}"></video>
           </div>
           <div class="details">
             <strong>ID:</strong> ${v.id}<br>
@@ -541,8 +480,8 @@
         const videoEl = document.getElementById(`video-${v.id}`);
         const videoTag = videoEl.querySelector("video");
 
-        // ✅ Setup ad tracking for this video
-        setupVideoAdTracking(videoTag, v.id, v.phone_number);
+        // Setup ad tracking for this video
+        setupVideoAdTracking(videoTag, v);
 
         thumb.addEventListener('click', () => {
           document.querySelectorAll(".search-item .video").forEach(c => c.style.display = 'none');
@@ -582,4 +521,3 @@
   </script>
 </body>
 </html>
-
