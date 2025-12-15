@@ -179,7 +179,13 @@
   <!-- SECTION 1: SEARCH & UPLOAD -->
   <section id="metadata" class="w-full max-w-5xl glass p-6 fade-in">
     <h2 class="text-2xl font-semibold text-blue-300 mb-4">🔍 Search & Upload Here</h2>
-    <iframe src="free_videos_metadata_frontend.html" class="h-[450px] bg-slate-900"></iframe>
+
+    <!-- FULLSCREEN BUTTON -->
+    <div class="flex justify-end mb-2">
+      <button onclick="openFullscreen('metaFrame')" class="text-blue-300 hover:text-white text-xl">⛶</button>
+    </div>
+
+    <iframe id="metaFrame" src="free_videos_metadata_frontend.html" class="h-[450px] bg-slate-900"></iframe>
   </section>
 
   <!-- SECTION 2: VIDEO DISPLAY + MINI TRAIN -->
@@ -205,14 +211,30 @@
       </div>
     </div>
 
+    <!-- FULLSCREEN BUTTON -->
+    <div class="flex justify-end mb-2">
+      <button onclick="openFullscreen('videoFrame')" class="text-blue-300 hover:text-white text-xl">⛶</button>
+    </div>
+
     <!-- Embedded Video Display -->
-    <iframe src="free_videos_displaying_frontend.html" class="h-[500px] bg-slate-900"></iframe>
+    <iframe id="videoFrame" src="free_videos_displaying_frontend.html" class="h-[500px] bg-slate-900"></iframe>
   </section>
 
   <!-- FOOTER -->
   <footer class="text-slate-500 text-sm mt-8 fade-in text-center pb-6">
-    <p>© 2025 Free Videos Content · Built with ❤️ by <span class="text-blue-400 font-semibold">YAN</span></p>
+    <p>© 2025 Free Videos Content · Built with ❤ by <span class="text-blue-400 font-semibold">YAN</span></p>
   </footer>
+
+
+  <!-- FULLSCREEN SCRIPT -->
+  <script>
+    function openFullscreen(id) {
+      const iframe = document.getElementById(id);
+      if (iframe.requestFullscreen) iframe.requestFullscreen();
+      else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+      else if (iframe.msRequestFullscreen) iframe.msRequestFullscreen();
+    }
+  </script>
 
 </body>
 </html>
