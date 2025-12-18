@@ -50,7 +50,7 @@ body{
   box-shadow:0 6px 20px rgba(6,182,212,0.3);
 }
 
-/* Thumbnail */
+/* Thumbnail – becomes the fullscreen element */
 .thumb{
   width:100%;
   aspect-ratio:16/9;
@@ -59,6 +59,7 @@ body{
   overflow:hidden;
   background-size:cover;
   background-position:center;
+  position:relative;               /* important for absolute overlay */
 }
 
 /* Metadata */
@@ -100,10 +101,10 @@ body{
   font-size:14px;
 }
 
-/* ---------- Overlay ---------- */
+/* ---------- Overlay (now absolute) ---------- */
 .overlay{
   inset:0;
-  position:fixed;
+  position:absolute;                 /* will fill its parent (thumb or body)  */
   background:rgba(0,0,0,0.9);
   display:flex;
   align-items:center;
@@ -155,6 +156,26 @@ body{
   font-weight:600;
   margin:15px 0;
 }
+
+/* custom fullscreen button (shown over the video) */
+.fullscreen-btn{
+  position:absolute;
+  top:8px;
+  right:8px;
+  background:rgba(0,0,0,0.5);
+  color:#fff;
+  border:none;
+  border-radius:4px;
+  padding:4px 8px;
+  font-size:14px;
+  cursor:pointer;
+  z-index:10;
+}
+
+/* hide native fullscreen button (WebKit browsers) */
+video::-webkit-media-controls-fullscreen-button{
+  display:none;
+}
 </style>
 </head>
 
@@ -164,7 +185,7 @@ body{
   <div class="loader" id="loader">Loading videos...</div>
 </div>
 
-<!-- overlay for prompts, countdowns and reward toast -->
+<!-- overlay used for all dialogs (prompt, countdown, reward toast) -->
 <div class="overlay" id="modalOverlay"></div>
 
 <div class="controls">
@@ -186,12 +207,14 @@ const overlay   = document.getElementById('modalOverlay');
 let videos = [];
 let displayedCount = 0;
 const BATCH_SIZE = 30;
-
 let currentIndex = 0;                // used by Prev/Next buttons
-let preAdPending = false;            // true while we wait for a rewarded‑ad to finish
-let pendingPlayIndex = null;         // index of the video that should resume after ad
-let currentVideoElement = null;       // <video> element currently active
-let countdownInterval = null;       // reference to the 45‑second timer
+let preAdPending = false;            // true while we wait for a rewarded‑ad
+let pendingPlayIndex = null;         // video index that should resume after ad
+let currentVideoElement = null;     // <video> element currently active
+let countdownInterval = null;        // reference to the 45‑second timer
+
+/* where the overlay should be attached – default = body */
+let overlayParent = document.body;
 
 /* -------------------------- LOCAL STORAGE -------------------------- */
 function getStoredIds(){
@@ -280,7 +303,7 @@ function hasAndroidBridge(){
   return (typeof Android !== 'undefined' && Android !== null);
 }
 
-/* simulate ad when no bridge is present (useful for testing in a browser) */
+/* simulate ad when no bridge is present */
 function simulateAd(){
   console.warn('Simulating rewarded ad (no Android bridge)…');
   setTimeout(()=>{ window.onAdCompleted(null); },2000);
@@ -289,6 +312,10 @@ function simulateAd(){
 /* --------------------------- OVERLAY HELPERS --------------------------- */
 function showOverlay(innerHTML){
   overlay.innerHTML = `<div class="dialog">${innerHTML}</div>`;
+  /* move overlay to the current parent (body or active thumb) */
+  if(overlay.parentNode !== overlayParent){
+    overlayParent.appendChild(overlay);
+  }
   overlay.classList.add('active');
 }
 function hideOverlay(){
@@ -343,7 +370,7 @@ function showPauseCountdownOverlay(videoEl, videoIdx){
     }
     preAdPending = true;
     pendingPlayIndex = videoIdx;
-    hideOverlay();               // remove the countdown UI
+    hideOverlay();               // remove countdown UI
     requestRewardedAd();          // directly request the ad – no loading screen
   };
 }
@@ -373,7 +400,7 @@ function requestRewardedAd(){
 
 /* ---------------------------- VIDEO PLAYBACK ---------------------------- */
 function playInline(i){
-  // clean up any stale UI / timers
+  /* clean up any stale UI / timers */
   hideOverlay();
   if(countdownInterval){
     clearInterval(countdownInterval);
@@ -382,7 +409,7 @@ function playInline(i){
   preAdPending = false;
   pendingPlayIndex = null;
 
-  currentIndex = i;            // update Prev/Next tracking
+  currentIndex = i;           // keep Prev/Next in sync
   const v = videos[i];
   const items = document.querySelectorAll('.queue-item');
 
@@ -390,11 +417,32 @@ function playInline(i){
     el.classList.toggle('active', idx===i);
     const thumb = el.querySelector('.thumb');
     if(idx===i){
+      /* make the thumb the fullscreen element */
       thumb.innerHTML = `
-        <video controls controlsList="nodownload" autoplay playsinline
+        <video controls controlsList="nodownload nofullscreen"
+               autoplay playsinline
                style="width:100%;height:100%"
                src="${v.mp4_link}"
-               poster="${v.archive_org_iframe_image_link}"></video>`;
+               poster="${v.archive_org_iframe_image_link}"></video>
+        <button class="fullscreen-btn" id="fsBtn_${i}">⛶</button>`;
+      // custom fullscreen button -------------------------------------------------
+      const fsBtn = thumb.querySelector('#fsBtn_'+i);
+      if(fsBtn){
+        fsBtn.addEventListener('click', (e)=>{
+          e.stopPropagation();           // don't trigger the card click
+          if(thumb.requestFullscreen){
+            thumb.requestFullscreen();
+          }else if(thumb.webkitRequestFullscreen){
+            thumb.webkitRequestFullscreen();
+          }else if(thumb.mozRequestFullScreen){
+            thumb.mozRequestFullScreen();
+          }else if(thumb.msRequestFullscreen){
+            thumb.msRequestFullscreen();
+          }
+        });
+      }
+      // make overlay attach to this thumb (so it follows fullscreen)
+      overlayParent = thumb;
     }else{
       thumb.innerHTML = '';
       if(videos[idx]) thumb.style.backgroundImage = `url('${videos[idx].archive_org_iframe_image_link}')`;
@@ -404,7 +452,7 @@ function playInline(i){
   queueList.children[i]?.scrollIntoView({behavior:'smooth',block:'center'});
   if(v.id!=null) store(Number(v.id));
 
-  // attach ad‑checkpoint logic
+  /* ------- ad‑checkpoint handling ------- */
   requestAnimationFrame(()=>{
     const active = document.querySelector('.queue-item.active');
     if(!active) return;
@@ -428,17 +476,18 @@ function playInline(i){
             if(watchAd){
               preAdPending = true;
               pendingPlayIndex = i;
-              hideOverlay();               // close the “Continue Watching” dialog
-              requestRewardedAd();          // request the rewarded ad (no loading overlay)
+              hideOverlay();               // close the question dialog
+              requestRewardedAd();          // fire the ad (no loading overlay)
             }else{
               showPauseCountdownOverlay(videoEl, i);
             }
           });
-          break; // stop checking further checkpoints until the user makes a choice
+          break; // stop checking further checkpoints until resolved
         }
       }
     };
 
+    // detach any previous listener
     if(videoEl._timeupdateListener){
       videoEl.removeEventListener('timeupdate', videoEl._timeupdateListener);
     }
@@ -488,10 +537,10 @@ window.onAdNotAvailable = function(){
 window.onAdCompleted = function(targetUrl){
   console.log('onAdCompleted() ->', targetUrl);
 
-  // ----- reward toast -----
+  // ----- reward toast (1 s) -----
   showOverlay('<p>Reward granted!</p>');
   setTimeout(()=>{
-    hideOverlay();                     // hide the toast after 1 s
+    hideOverlay();                     // toast disappears after 1 s
 
     // ----- resume the video that was paused for the ad -----
     try{
@@ -509,7 +558,7 @@ window.onAdCompleted = function(targetUrl){
     preAdPending = false;
     pendingPlayIndex = null;
 
-    // ----- open any URL supplied by the ad (if applicable) -----
+    // ----- open any URL supplied by the ad -----
     if(targetUrl && targetUrl !== 'null' && targetUrl !== ''){
       try{
         if(hasAndroidBridge() && typeof Android.loadUrlInWebView === 'function'){
@@ -532,7 +581,7 @@ window.onAdCompleted = function(targetUrl){
         }
       }
     }catch(e){ console.warn('preload after ad failed',e); }
-  },1000); // 1 second toast duration
+  },1000);
 };
 
 /* --------------------------- INIT --------------------------- */
@@ -540,7 +589,7 @@ window.onAdCompleted = function(targetUrl){
   await sendStoredToBackend();
   await loadVideos();
 
-  // ask native to preload an ad for the first time (if bridge exists)
+  // ask native to preload a rewarded ad for the first use (if bridge exists)
   try{
     if(hasAndroidBridge()){
       if(typeof Android.preloadRewardedAd === 'function'){
@@ -550,7 +599,7 @@ window.onAdCompleted = function(targetUrl){
       }
       console.log('Requested native to preload rewarded ad (init).');
     }else{
-      console.log('Android bridge not detected on init (running in browser).');
+      console.log('Android bridge not detected on init (likely running in browser).');
     }
   }catch(e){
     console.warn('preload request failed',e);
