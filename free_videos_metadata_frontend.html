@@ -139,6 +139,18 @@
       .search{flex-direction:column}
       .search button{margin-left:0;margin-top:8px;width:100%}
     }
+    /* ---------- Modal for rewarded‑ad prompt ---------- */
+    .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:10000}
+    .modal.hidden{display:none}
+    .modal-content{
+      background:var(--card);
+      padding:20px;
+      border-radius:12px;
+      text-align:center;
+      max-width:320px;
+      width:90%;
+      color:var(--text);
+    }
   </style>
 </head>
 <body>
@@ -208,6 +220,23 @@
     </section>
   </main>
 
+  <!-- ---------- Rewarded‑Ad Prompt Modal ---------- -->
+  <div id="adModal" class="modal hidden">
+    <div class="modal-content">
+      <p id="modalMessage">You have reached an ad point. Choose an option:</p>
+
+      <button id="watchAdBtn" class="btn primary">Watch Ad</button>
+
+      <div id="waitSection" style="margin-top:12px">
+        <button id="waitAdBtn" class="btn">Wait 45 seconds</button>
+      </div>
+
+      <div id="countdownSection" class="hidden" style="margin-top:12px">
+        <p class="small">Resuming in <span id="countdownNumber">45</span> seconds.</p>
+      </div>
+    </div>
+  </div>
+
   <script>
   /* -------------------------------------------------------------------------
    *  Constants & simple helpers
@@ -223,6 +252,9 @@
   let currentAdVideo = null;                     // video that is paused for an ad
   const AD_BASE_MILESTONES = [10, 120, 300, 600, 1200, 1800, 2400, 3000]; // up to 50 min
   const AD_REPEAT_INTERVAL = 600;                // every 10 min after 50 min
+
+  // timer used while user waits 45 s
+  let adPromptTimer = null;
 
   /* -------------------------------------------------------------------------
    *  Utility functions
@@ -309,17 +341,12 @@
   /* -------------------------------------------------------------------------
    *  Rewarded‑ad native bridge callbacks (JS side)
    * ----------------------------------------------------------------------- */
-  // Called by Android when a rewarded ad finishes loading
   function onAdPreloaded() {
     console.log('✅ Rewarded ad preloaded');
   }
-
-  // Called by Android when a rewarded ad failed to load
   function onAdFailedToPreload() {
     console.warn('⚠️ Rewarded ad failed to preload');
   }
-
-  // Called by Android when the ad cannot be shown
   function onAdNotAvailable() {
     console.warn('⚠️ Rewarded ad not available');
     if (currentAdVideo) {
@@ -327,41 +354,130 @@
       currentAdVideo = null;
     }
   }
-
-  // Called by Android after the user watches the ad
-  // `url` is the optional URL the native side may pass back (we ignore it)
   function onAdCompleted(url) {
     console.log('✅ Rewarded ad completed', url);
     if (currentAdVideo) {
       currentAdVideo.play();
       currentAdVideo = null;
     }
-    // Pre‑load the next ad for the next request
     if (window.Android && typeof Android.preloadRewardedAd === 'function') {
       Android.preloadRewardedAd();
     }
   }
-
-  // Native side can push the Android device ID to the page
   function setAndroidId(id) {
     console.log('Received Android ID from native code:', id);
   }
 
   /* -------------------------------------------------------------------------
-   *  Helper that creates / updates the per‑video ad‑state machine
+   *  Helper to exit fullscreen (if any)
+   * ----------------------------------------------------------------------- */
+  function exitFullScreenIfNeeded(callback) {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      const exit = document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      Promise.resolve(exit).then(() => {
+        if (callback) callback();
+      });
+    } else {
+      if (callback) callback();
+    }
+  }
+
+  /* -------------------------------------------------------------------------
+   *  Modal handling – show prompt, wait, cancel, request ad
+   * ----------------------------------------------------------------------- */
+  function showAdPrompt(video) {
+    // Take the user out of fullscreen first (if needed)
+    exitFullScreenIfNeeded(() => {
+      // Pause the video and keep a reference for later
+      video.pause();
+      currentAdVideo = video;
+
+      // Populate modal with the video‑ID (used when requesting the ad)
+      const modal = document.getElementById('adModal');
+      modal.dataset.videoId = video.dataset.videoId || '';
+
+      // Reset UI to its initial state
+      document.getElementById('waitSection').classList.remove('hidden');
+      document.getElementById('countdownSection').classList.add('hidden');
+      document.getElementById('countdownNumber').textContent = '45';
+
+      // Show modal
+      modal.classList.remove('hidden');
+    });
+  }
+
+  /* ---- watch‑ad button (available at all times) ---- */
+  document.getElementById('watchAdBtn').addEventListener('click', () => {
+    const modal = document.getElementById('adModal');
+    const videoId = modal.dataset.videoId;
+
+    // Cancel any waiting timer
+    if (adPromptTimer) {
+      clearInterval(adPromptTimer);
+      adPromptTimer = null;
+    }
+
+    modal.classList.add('hidden');
+
+    // Request the rewarded ad via the Android bridge
+    if (window.Android && typeof Android.requestRewardedAd === 'function') {
+      Android.requestRewardedAd(videoId);
+    } else {
+      console.warn('Android bridge not available – cannot request rewarded ad');
+      // Fallback: simply resume playback
+      if (currentAdVideo) {
+        currentAdVideo.play();
+        currentAdVideo = null;
+      }
+    }
+  });
+
+  /* ---- wait‑45‑seconds button ---- */
+  document.getElementById('waitAdBtn').addEventListener('click', () => {
+    // Hide the wait button, show the countdown area
+    document.getElementById('waitSection').classList.add('hidden');
+    document.getElementById('countdownSection').classList.remove('hidden');
+
+    let remaining = 45;
+    const countdownEl = document.getElementById('countdownNumber');
+    countdownEl.textContent = remaining;
+
+    if (adPromptTimer) clearInterval(adPromptTimer);
+    adPromptTimer = setInterval(() => {
+      remaining--;
+      countdownEl.textContent = remaining;
+      if (remaining <= 0) {
+        clearInterval(adPromptTimer);
+        adPromptTimer = null;
+
+        // Hide modal and resume the video
+        document.getElementById('adModal').classList.add('hidden');
+        // Reset UI sections for potential next use
+        document.getElementById('waitSection').classList.remove('hidden');
+        document.getElementById('countdownSection').classList.add('hidden');
+
+        if (currentAdVideo) {
+          currentAdVideo.play();
+          currentAdVideo = null;
+        }
+      }
+    }, 1000);
+  });
+
+  /* -------------------------------------------------------------------------
+   *  Reward‑ad tracking per video (modified to use the prompt)
    * ----------------------------------------------------------------------- */
   function setupRewardedAdTracking(video) {
-    // Phone number may be empty, null or the string "NULL"
+    // Skip videos without a phone number (no ads)
     const phoneNumber = video.dataset.phoneNumber;
     if (!phoneNumber || phoneNumber === 'NULL' || phoneNumber === 'null') {
-      // No ads for this video
       return;
     }
 
-    // Create a simple state holder on the video element itself
+    // Initialise per‑video ad state if not present
     if (!video._adState) {
       video._adState = {
-        milestones: AD_BASE_MILESTONES.slice(), // copy
+        milestones: AD_BASE_MILESTONES.slice(),
         repeatInterval: AD_REPEAT_INTERVAL,
         nextIdx: 0
       };
@@ -376,24 +492,16 @@
       if (state.nextIdx < state.milestones.length) {
         target = state.milestones[state.nextIdx];
       } else {
-        // After the last hard‑coded milestone keep showing ads every repeatInterval seconds
         const extraSteps = state.nextIdx - state.milestones.length + 1;
         target = state.milestones[state.milestones.length - 1] + extraSteps * state.repeatInterval;
       }
 
       if (current >= target) {
-        // Move to next milestone so we never fire twice for the same threshold
+        // Move on to the next milestone so we don’t fire again for this point
         state.nextIdx++;
 
-        // Pause the video and ask native code to show a rewarded ad
-        if (window.Android && typeof Android.requestRewardedAd === 'function') {
-          currentAdVideo = video;
-          video.pause();
-          // Pass the video ID (or any URL you prefer) – native side just needs a non‑empty string
-          Android.requestRewardedAd(video.dataset.videoId);
-        } else {
-          console.warn('Android bridge not available – cannot request rewarded ad');
-        }
+        // Instead of playing the ad instantly, show the user prompt
+        showAdPrompt(video);
       }
     });
   }
@@ -485,7 +593,7 @@
         return;
       }
 
-      // Build HTML for each video
+      // Render each video entry
       searchResults.innerHTML = videos.map(v => `
         <div class="search-item">
           <div class="thumb" id="thumb-${v.id}">
@@ -511,7 +619,7 @@
         </div>
       `).join('');
 
-      // Attach listeners for each rendered video
+      // Attach behaviours for each video card
       videos.forEach(v => {
         const thumb   = document.getElementById(`thumb-${v.id}`);
         const videoEl = document.getElementById(`video-${v.id}`);
@@ -525,7 +633,7 @@
           videoEl.style.display = 'block';
         });
 
-        // Pause all other videos when a new one starts playing
+        // Pause other videos when a new one starts
         video.addEventListener('play', () => {
           document.querySelectorAll('video').forEach(vid => {
             if (vid !== video) {
@@ -541,7 +649,7 @@
         // Store video ID for analytics (unchanged)
         video.addEventListener('playing', () => storeVideoId(v.id));
 
-        // ---- NEW ---- Rewarded‑ad tracking per video
+        // Initialise rewarded‑ad tracking for this video
         setupRewardedAdTracking(video);
       });
     } catch (err) {
