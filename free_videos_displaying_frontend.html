@@ -17,16 +17,16 @@
 html,body{
   margin:0;
   padding:0;
-  background:linear-gradient(180deg,#071025 0%,#071827 100%);
+  background:linear-gradient(180deg,#071025 0%, #071827 100%);
   color:var(--soft);
-  font-family:Arial,Helvetica,sans-serif;
+  font-family:Arial, Helvetica, sans-serif;
 }
 body{
   padding:16px;
   overflow-x:hidden;
 }
 
-/* Queue container */
+/* Queue Container */
 .queue{
   display:flex;
   flex-direction:column;
@@ -35,19 +35,19 @@ body{
   max-height:100vh;
 }
 
-/* Card */
+/* Item Card */
 .queue-item{
   background:rgba(255,255,255,0.05);
   border-radius:10px;
   padding:10px;
   cursor:pointer;
-  transition:.15s,opacity .3s ease-in;
+  transition:0.15s, opacity 0.3s ease-in;
   opacity:0;
 }
 .queue-item.visible{opacity:1;}
 .queue-item.active{
   border:1px solid var(--accent);
-  box-shadow:0 6px 20px rgba(6,182,212,.3);
+  box-shadow:0 6px 20px rgba(6,182,212,0.3);
 }
 
 /* Thumbnail */
@@ -65,9 +65,9 @@ body{
 .q-title{font-size:15px;font-weight:600;margin:6px 0 2px}
 .q-sub{font-size:12px;color:var(--muted)}
 .q-id{font-size:11px;color:var(--muted)}
-.q-link{font-size:12px;color:var(--soft);margin-top:4px}
-.q-link a{color:#4ecbff;text-decoration:none}
-.q-link a:hover{text-decoration:underline}
+.q-link{font-size:12px;color:var(--soft); margin-top:4px}
+.q-link a{color:#4ecbff;text-decoration:none;}
+.q-link a:hover{text-decoration:underline;}
 
 /* Controls */
 .controls{
@@ -92,6 +92,17 @@ body{
   color:#000;
 }
 
+/* Primary/Secondary variations (used inside modal) */
+.btn.primary{
+  background:var(--accent);
+  color:#000;
+  border-color:var(--accent);
+}
+.btn.secondary{
+  background:rgba(255,255,255,0.08);
+  color:var(--soft);
+}
+
 /* Loader */
 .loader{
   text-align:center;
@@ -100,104 +111,42 @@ body{
   font-size:14px;
 }
 
-/* ---------- Modal for ad prompt ---------- */
-.modal{
+/* ----------- MODAL OVERLAY ----------- */
+.ad-overlay{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,.6);
+  background:rgba(0,0,0,0.7);
   display:flex;
-  align-items:center;
   justify-content:center;
-  opacity:0;
-  visibility:hidden;
-  transition:opacity .2s ease;
+  align-items:center;
   z-index:9999;
 }
-.modal.visible{
-  opacity:1;
-  visibility:visible;
-}
-.modal-content{
+.ad-overlay.hidden{display:none;}
+.ad-modal{
   background:var(--card);
   padding:20px;
-  border-radius:10px;
-  max-width:340px;
+  border-radius:12px;
+  max-width:90%;
+  width:340px;
   text-align:center;
   color:var(--soft);
-  line-height:1.4;
 }
-.modal-content h2{margin:0 0 10px}
-.modal-content p{margin-bottom:16px}
-.modal-buttons{
+.ad-modal h2{
+  margin:0 0 12px;
+  font-size:20px;
+}
+.ad-modal p{
+  margin:8px 0;
+}
+.ad-buttons{
   display:flex;
-  gap:10px;
-  justify-content:center;
+  justify-content:space-around;
+  margin-top:15px;
 }
-.modal-buttons .btn-primary{
-  background:var(--accent);
-  color:#000;
-  border:none;
-  border-radius:6px;
-  padding:8px 16px;
-  cursor:pointer;
+.countdown-timer{
+  font-size:32px;
+  margin:8px 0;
 }
-.modal-buttons .btn-secondary{
-  background:rgba(255,255,255,.1);
-  color:var(--soft);
-  border:none;
-  border-radius:6px;
-  padding:8px 16px;
-  cursor:pointer;
-}
-
-/* ---------- Pause overlay (cancel + countdown) ---------- */
-.pause-overlay{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.75);
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  opacity:0;
-  visibility:hidden;
-  transition:opacity .2s ease;
-  color:var(--soft);
-  z-index:9998;
-  text-align:center;
-  padding:0 20px;
-}
-.pause-overlay.visible{
-  opacity:1;
-  visibility:visible;
-}
-.pause-overlay .timer{
-  font-size:48px;
-  margin:20px 0;
-}
-.pause-overlay .btn-primary{
-  background:var(--accent);
-  color:#000;
-  border:none;
-  border-radius:6px;
-  padding:8px 16px;
-  cursor:pointer;
-}
-
-/* ---------- Reward toast ---------- */
-.reward{
-  position:fixed;
-  inset:auto auto 20% 50%;
-  transform:translateX(-50%);
-  background:var(--accent);
-  color:#000;
-  padding:12px 24px;
-  border-radius:6px;
-  opacity:0;
-  transition:opacity .3s;
-  z-index:10000;
-}
-.reward.show{opacity:1}
 </style>
 </head>
 
@@ -212,55 +161,45 @@ body{
   <button class="btn" id="nextBtn">Next</button>
 </div>
 
-<!-- Modal asking the user to watch an ad -->
-<div id="adModal" class="modal">
-  <div class="modal-content">
-    <h2>Continue Watching</h2>
-    <p>To continue watching this video, please watch a short advertisement.
-       This helps us support the service and keep the content available.</p>
-    <div class="modal-buttons">
-      <button id="watchAdBtn" class="btn-primary">Watch Ad</button>
-      <button id="cancelAdBtn" class="btn-secondary">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- Overlay shown when user cancels – includes a 45‑second countdown -->
-<div id="pauseOverlay" class="pause-overlay">
-  <p>Please wait...</p>
-  <p>The video is currently paused. You can continue watching after the countdown finishes.</p>
-  <div class="timer" id="countdownNumber">45</div>
-  <button id="watchAdDuringPauseBtn" class="btn-primary">Watch Ad</button>
-</div>
-
-<!-- Small toast shown after a rewarded ad finishes -->
-<div id="rewardToast" class="reward">Reward Granted!</div>
+<!-- ==================== MODAL (added by script) ==================== -->
 
 <script>
-/* ------------------------ Configuration ------------------------ */
+/* -------------------------------------------------
+   Constants & Global variables
+------------------------------------------------- */
 const BACKEND = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
 const STORAGE_KEY = 'clicked_ids';
-/* Checkpoints (seconds) – 10 s, 2 min, 5 min, etc. */
 const AD_CHECKPOINTS = [10,120,300,600,1200,1800,2400,3000,3600,4200,4800,5400,6000,6600,7200];
 
-const queueList   = document.getElementById('queueList');
-const loader      = document.getElementById('loader');
-let videos = [];            // all fetched video objects
-let displayedCount = 0;      // how many cards are already rendered
-const BATCH_SIZE = 30;
-let currentIndex = 0;        // currently playing index
+const queueList = document.getElementById('queueList');
+const loader    = document.getElementById('loader');
 
-/* ------------------------ Local storage ----------------------- */
+let videos = [];               // all videos received from backend
+let displayedCount = 0;        // how many items already rendered
+const BATCH_SIZE = 30;         // batch size for infinite scroll
+let currentIndex = 0;          // index of video currently playing
+
+let activeVideo = null;        // video element that is currently active/in‑gate
+
+/* -------------------------------------------------
+   ---------- LocalStorage helpers ----------
+------------------------------------------------- */
 function getStoredIds(){
-  try{ const s = localStorage.getItem(STORAGE_KEY); return s?JSON.parse(s):[]; }catch{ return []; }
+  try{
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  }catch{ return []; }
 }
 function store(id){
-  const ids = new Set(getStoredIds()); ids.add(id);
-  localStorage.setItem(STORAGE_KEY,JSON.stringify([...ids]));
+  const ids = new Set(getStoredIds());
+  ids.add(Number(id));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
 }
 function clearStored(){ localStorage.removeItem(STORAGE_KEY); }
 
-/* ---------------------- Send clicks to backend --------------- */
+/* -------------------------------------------------
+   ---------- Send stored clicks to backend ----------
+------------------------------------------------- */
 async function sendStoredToBackend(){
   const ids = getStoredIds();
   if(ids.length===0) return;
@@ -272,10 +211,14 @@ async function sendStoredToBackend(){
     });
     console.log('Sent to backend:',ids);
     clearStored();
-  }catch(e){ console.error('Failed to send ids:',e); }
+  }catch(err){
+    console.error('Failed to send ids:',err);
+  }
 }
 
-/* -------------------------- Load videos ---------------------- */
+/* -------------------------------------------------
+   ---------- Load all videos once ----------
+------------------------------------------------- */
 async function loadVideos(){
   loader.textContent = "Fetching videos...";
   try{
@@ -288,270 +231,415 @@ async function loadVideos(){
   }
 }
 
-/* -------------------------- Render batch --------------------- */
+/* -------------------------------------------------
+   ---------- Render next batch ----------
+------------------------------------------------- */
 function renderNextBatch(){
-  const batch = videos.slice(displayedCount, displayedCount+BATCH_SIZE);
-  displayedCount += batch.length;
+  const nextBatch = videos.slice(displayedCount, displayedCount + BATCH_SIZE);
+  displayedCount += nextBatch.length;
 
-  batch.forEach((v,i)=>{
+  nextBatch.forEach((v,i)=>{
     const card = document.createElement('div');
     card.className = 'queue-item';
-    const absoluteIdx = displayedCount - batch.length + i;
+    const absoluteIndex = (displayedCount - nextBatch.length) + i;
 
     card.innerHTML = `
       <div class="thumb" style="background-image:url('${v.archive_org_iframe_image_link||""}')"></div>
-      <div class="q-title">${v.title||"Untitled"}</div>
-      <div class="q-sub">By ${v.username||"Unknown"}</div>
-      <div class="q-id">ID: ${v.id||"?"}</div>
-      <div class="q-link">Link 1: <a href="${v.link_1}" target="_blank">${v.link_1||"No link"}</a></div>
-      <div class="q-link">Link 2: <a href="${v.link_2}" target="_blank">${v.link_2||"No link"}</a></div>
+      <div class="q-title">${v.title || "Untitled"}</div>
+      <div class="q-sub">By ${v.username || "Unknown"}</div>
+      <div class="q-id">ID: ${v.id || "?"}</div>
+
+      <div class="q-link">Link 1: <a href="${v.link_1}" target="_blank">${v.link_1 || "No link"}</a></div>
+      <div class="q-link">Link 2: <a href="${v.link_2}" target="_blank">${v.link_2 || "No link"}</a></div>
     `;
-    card.onclick = () => playInline(absoluteIdx);
+    card.onclick = () => playInline(absoluteIndex);
     queueList.appendChild(card);
     requestAnimationFrame(()=>card.classList.add('visible'));
   });
 
   if(displayedCount >= videos.length){
-    const end = document.createElement('div');
-    end.className = 'loader';
-    end.textContent = "🎉 All videos loaded";
-    queueList.appendChild(end);
+    const endMsg = document.createElement('div');
+    endMsg.className = 'loader';
+    endMsg.textContent = "🎉 All videos loaded";
+    queueList.appendChild(endMsg);
   }
 }
 
-/* -------------------------- Scrolling ------------------------ */
+/* -------------------------------------------------
+   ---------- Infinite‑scroll ----------
+------------------------------------------------- */
 queueList.addEventListener('scroll',()=>{
-  if(queueList.scrollTop + queueList.clientHeight >= queueList.scrollHeight-150){
-    if(displayedCount < videos.length) renderNextBatch();
+  const bottomReached = queueList.scrollTop + queueList.clientHeight >= queueList.scrollHeight - 150;
+  if(bottomReached && displayedCount < videos.length){
+    renderNextBatch();
   }
 });
 
-/* -------------------------- Android bridge -------------------- */
-function hasAndroidBridge(){ return (typeof Android!=='undefined' && Android!==null); }
-
-/* -------------------------- Helper – ad eligibility --------- */
-function shouldShowAds(v){ return v.phone_number!=null && v.phone_number!=='' && v.phone_number!=='NULL'; }
-
-/* -------------------------- UI elements ---------------------- */
-const adModal               = document.getElementById('adModal');
-const watchAdBtn            = document.getElementById('watchAdBtn');
-const cancelAdBtn           = document.getElementById('cancelAdBtn');
-const pauseOverlay          = document.getElementById('pauseOverlay');
-const countdownNumberEl    = document.getElementById('countdownNumber');
-const watchAdDuringPauseBtn = document.getElementById('watchAdDuringPauseBtn');
-const rewardToast           = document.getElementById('rewardToast');
-
-let adCountdownTimer = null;   // timer for the 45‑second wait
-let activeVideoForAd = null;   // video currently awaiting a decision
-
-/* ----- UI helper functions ----- */
-function showAdModal(video){
-  activeVideoForAd = video;
-  adModal.classList.add('visible');
+/* -------------------------------------------------
+   ---------- Helpers ----------
+------------------------------------------------- */
+function hasAndroidBridge(){
+  return (typeof Android !== 'undefined' && Android !== null);
 }
-function hideAdModal(){ adModal.classList.remove('visible'); }
-
-function showPauseOverlay(video){
-  activeVideoForAd = video;
-  pauseOverlay.classList.add('visible');
-  startCountdownTimer();
+function shouldShowAds(videoData){
+  return videoData.phone_number != null && videoData.phone_number !== '' && videoData.phone_number !== 'NULL';
 }
-function hidePauseOverlay(){ pauseOverlay.classList.remove('visible'); }
 
-function startCountdownTimer(){
-  let remaining = 45;
-  countdownNumberEl.textContent = remaining;
-  clearCountdownTimer();
-  adCountdownTimer = setInterval(()=>{
-    remaining--;
-    countdownNumberEl.textContent = remaining;
-    if(remaining<=0){
-      clearCountdownTimer();
-      // countdown finished – let the user resume manually
-      if(activeVideoForAd){
-        activeVideoForAd._adPromptActive = false;
-      }
-      hidePauseOverlay();
-      activeVideoForAd = null;
+/* -------------------------------------------------
+   ---------- Native callbacks ----------
+------------------------------------------------- */
+window.onAdPreloaded = function(){
+  console.log('onAdPreloaded()');
+};
+window.onAdFailedToPreload = function(){
+  console.warn('onAdFailedToPreload()');
+};
+window.onAdNotAvailable = function(){
+  console.warn('onAdNotAvailable() – resuming video (no ad).');
+  if(activeVideo){
+    activeVideo._gateOpen = false;
+    if(activeVideo._wasPausedForAd){
+      activeVideo._wasPausedForAd = false;
+      activeVideo.play().catch(()=>{});
     }
-  },1000);
-}
-function clearCountdownTimer(){
-  if(adCountdownTimer){ clearInterval(adCountdownTimer); adCountdownTimer = null; }
-}
-function hideAllOverlays(){
-  hideAdModal();
-  hidePauseOverlay();
-  clearCountdownTimer();
-  activeVideoForAd = null;
-}
-function showRewardToast(){
-  rewardToast.classList.add('show');
-  setTimeout(()=>rewardToast.classList.remove('show'),1000);
-}
-
-/* ----- Button listeners ----- */
-watchAdBtn.addEventListener('click',()=>{ hideAdModal(); if(activeVideoForAd) requestRewardedAd(activeVideoForAd); });
-cancelAdBtn.addEventListener('click',()=>{ hideAdModal(); if(activeVideoForAd) showPauseOverlay(activeVideoForAd); });
-watchAdDuringPauseBtn.addEventListener('click',()=>{
-  clearCountdownTimer();
-  hidePauseOverlay();
-  if(activeVideoForAd) requestRewardedAd(activeVideoForAd);
-});
-
-/* ----- Ask native to show a rewarded ad ----- */
-function requestRewardedAd(video){
-  video._wasPausedForAd = true;
-  try{ video.pause(); }catch(e){ console.warn('pause failed',e); }
-
-  try{
-    if(hasAndroidBridge() && typeof Android.requestRewardedAd==='function'){
-      Android.requestRewardedAd(video.currentSrc||video.src||'');
-      console.log('Requested rewarded ad from native.');
-    }else{
-      console.warn('Android bridge missing – simulating ad.');
-      setTimeout(()=>window.onAdCompleted(null),2000);
-    }
-  }catch(e){
-    console.error('requestRewardedAd error',e);
-    setTimeout(()=>window.onAdCompleted(null),2000);
-  }
-}
-
-/* ------------------ Native callbacks ----------------------- */
-window.onAdPreloaded =()=>{ console.log('onAdPreloaded()'); };
-window.onAdFailedToPreload =()=>{ console.warn('onAdFailedToPreload()'); };
-
-window.onAdNotAvailable =()=>{
-  console.warn('onAdNotAvailable – resuming video.');
-  hideAllOverlays();
-  if(activeVideoForAd){
-    const v = activeVideoForAd;
-    v._wasPausedForAd = false;
-    v._adPromptActive = false;
-    v.play().catch(()=>{});
-    activeVideoForAd = null;
   }
 };
-
-window.onAdCompleted = targetUrl=>{
-  console.log('onAdCompleted ->',targetUrl);
-  hideAllOverlays();
-  if(!activeVideoForAd){ console.warn('onAdCompleted but no active video'); return; }
-
-  const video = activeVideoForAd;
-  video._wasPausedForAd = false;
-  video._adPromptActive = false;
-
-  // show reward, then resume playback
+window.onAdCompleted = function(targetUrl){
+  console.log('onAdCompleted() ->',targetUrl);
+  // 1‑second reward toast
   showRewardToast();
-  setTimeout(()=>{ video.play().catch(()=>{}); activeVideoForAd=null; },1000);
 
-  // ask native to preload next ad
+  // Resume the video that was paused for the ad
+  if(activeVideo){
+    activeVideo._gateOpen = false;
+    if(activeVideo._wasPausedForAd){
+      activeVideo._wasPausedForAd = false;
+      activeVideo.play().catch(()=>{});
+    }
+  }
+  // Hide modal (in case it is still visible)
+  if(!adOverlay.classList.contains('hidden')){
+    adOverlay.classList.add('hidden');
+  }
+
+  // Pre‑load the next ad
   try{
     if(hasAndroidBridge()){
-      if(typeof Android.preloadRewardedAd==='function') Android.preloadRewardedAd();
-      else if(Android.preloadRewardedAd) Android.preloadRewardedAd();
+      if(typeof Android.preloadRewardedAd === 'function'){
+        Android.preloadRewardedAd();
+      }else if(Android.preloadRewardedAd){
+        Android.preloadRewardedAd();
+      }
     }
-  }catch(e){ console.warn('preload after ad failed',e); }
+  }catch(e){ console.warn('preload after ad error',e); }
 
-  // open supplied url, if any
-  if(targetUrl && targetUrl!=='null' && targetUrl!==''){
+  // Open optional target URL
+  if(targetUrl && targetUrl !== 'null' && targetUrl !== ''){
     try{
-      if(hasAndroidBridge() && typeof Android.loadUrlInWebView==='function'){
-        Android.loadUrlInWebView(targetUrl);
+      if(hasAndroidBridge()){
+        if(typeof Android.loadUrlInWebView === 'function'){
+          Android.loadUrlInWebView(targetUrl);
+        }else if(Android.loadUrlInWebView){
+          Android.loadUrlInWebView(targetUrl);
+        }else{
+          window.location.href = targetUrl;
+        }
       }else{
-        window.open(targetUrl,'_blank');
+        window.location.href = targetUrl;
       }
     }catch(e){ console.error('failed to open targetUrl',e); }
   }
 };
 
-/* -------------------------- Play video ----------------------- */
-function playInline(i){
-  // clean any previous UI / timers
-  hideAllOverlays();
+/* -------------------------------------------------
+   ---------- Modal (Continue Watching) ----------
+------------------------------------------------- */
+const adOverlay = document.createElement('div');
+adOverlay.id = 'adOverlay';
+adOverlay.className = 'ad-overlay hidden';
+adOverlay.innerHTML = `
+  <div class="ad-modal">
+    <h2 id="adTitle">Continue Watching</h2>
+    <p id="adMessage">
+      To continue watching this video, please watch a short advertisement.<br>
+      This helps us support the service and keep the content available.
+    </p>
 
+    <div id="countdownContainer" style="display:none;">
+      <p>Please wait</p>
+      <p id="countdownMessage">
+        The video is currently paused. You can continue watching after the countdown finishes.
+      </p>
+      <div class="countdown-timer" id="timerDisplay">45</div>
+      <button class="btn primary" id="watchAdDuringCountdownBtn">Watch Ad</button>
+    </div>
+
+    <div class="ad-buttons">
+      <button class="btn primary" id="watchAdBtn">Watch Ad</button>
+      <button class="btn secondary" id="cancelBtn">Cancel</button>
+    </div>
+  </div>`;
+document.body.appendChild(adOverlay);
+
+const watchAdBtn               = document.getElementById('watchAdBtn');
+const cancelBtn               = document.getElementById('cancelBtn');
+const watchAdDuringCountdownBtn = document.getElementById('watchAdDuringCountdownBtn');
+const countdownContainer      = document.getElementById('countdownContainer');
+const timerDisplay            = document.getElementById('timerDisplay');
+
+let countdownInterval = null;
+let countdownRemaining = 45;
+
+/* -------------------------------------------------
+   ---------- Helper: exit fullscreen ----------
+------------------------------------------------- */
+function exitFullScreen(){
+  if (document.fullscreenElement){
+    document.exitFullscreen().catch(()=>{});
+  }else if (document.webkitFullscreenElement){
+    document.webkitExitFullscreen && document.webkitExitFullscreen();
+  }else if (document.mozFullScreenElement){
+    document.mozCancelFullScreen && document.mozCancelFullScreen();
+  }else if (document.msFullscreenElement){
+    document.msExitFullscreen && document.msExitFullscreen();
+  }
+}
+
+/* -------------------------------------------------
+   ---------- Show modal (gate) ----------
+------------------------------------------------- */
+function showGate(video){
+  video._gateOpen = true;
+  activeVideo = video;
+  // pause video immediately
+  try{ video.pause(); }catch(e){}
+  // leave fullscreen so that the modal is fully visible
+  exitFullScreen();
+
+  // reset UI to the default (watch / cancel)
+  document.getElementById('watchAdBtn').style.display   = 'inline-block';
+  document.getElementById('cancelBtn').style.display    = 'inline-block';
+  countdownContainer.style.display = 'none';
+  adOverlay.classList.remove('hidden');
+}
+
+/* -------------------------------------------------
+   ---------- Countdown after Cancel ----------
+------------------------------------------------- */
+function startCountdown(){
+  // hide primary/secondary buttons
+  document.getElementById('watchAdBtn').style.display = 'none';
+  document.getElementById('cancelBtn').style.display  = 'none';
+  // show countdown UI
+  countdownContainer.style.display = 'block';
+  countdownRemaining = 45;
+  timerDisplay.textContent = countdownRemaining;
+
+  countdownInterval = setInterval(()=>{
+    countdownRemaining--;
+    if(countdownRemaining <= 0){
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+      // countdown finished -> resume playback
+      hideGateAndResume();
+    }else{
+      timerDisplay.textContent = countdownRemaining;
+    }
+  },1000);
+}
+
+/* -------------------------------------------------
+   ---------- Hide modal & resume video ----------
+------------------------------------------------- */
+function hideGateAndResume(){
+  adOverlay.classList.add('hidden');
+  if(activeVideo){
+    activeVideo._gateOpen = false;
+    activeVideo.play().catch(()=>{});
+  }
+  activeVideo = null;
+  if(countdownInterval){
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+}
+
+/* -------------------------------------------------
+   ---------- Request native rewarded ad ----------
+------------------------------------------------- */
+function requestRewardedAd(){
+  try{
+    if(hasAndroidBridge()){
+      if(typeof Android.requestRewardedAd === 'function'){
+        Android.requestRewardedAd(activeVideo ? (activeVideo.currentSrc || activeVideo.src) : '');
+      }else if (Android.requestRewardedAd){
+        Android.requestRewardedAd(activeVideo ? (activeVideo.currentSrc || activeVideo.src) : '');
+      }
+    }else{
+      // -------------------------------------------------
+      // Simulate ad flow when running in a normal browser
+      // -------------------------------------------------
+      console.warn('Android bridge not detected – simulating ad.');
+      setTimeout(()=>{ window.onAdCompleted(null); },1500);
+    }
+  }catch(e){
+    console.error('requestRewardedAd error',e);
+    // Ensure video can continue even if the native call failed
+    if(activeVideo){
+      activeVideo._gateOpen = false;
+      activeVideo.play().catch(()=>{});
+    }
+  }
+}
+
+/* -------------------------------------------------
+   ---------- Toast (1‑second reward) ----------
+------------------------------------------------- */
+function showRewardToast(){
+  const toast = document.createElement('div');
+  toast.textContent = 'Reward granted!';
+  toast.style.position = 'fixed';
+  toast.style.bottom = '20px';
+  toast.style.right = '20px';
+  toast.style.background = 'rgba(0,0,0,0.8)';
+  toast.style.color = '#fff';
+  toast.style.padding = '8px 12px';
+  toast.style.borderRadius = '5px';
+  toast.style.zIndex = '10000';
+  document.body.appendChild(toast);
+  setTimeout(()=>{ toast.remove(); },1000);
+}
+
+/* -------------------------------------------------
+   ---------- Modal button listeners ----------
+------------------------------------------------- */
+watchAdBtn.addEventListener('click',()=>{
+  // User agreed to watch the ad
+  adOverlay.classList.add('hidden');
+  if(activeVideo) activeVideo._wasPausedForAd = true;
+  requestRewardedAd();
+});
+
+cancelBtn.addEventListener('click',()=>{
+  // User cancelled – start the 45‑second wait
+  startCountdown();
+});
+
+watchAdDuringCountdownBtn.addEventListener('click',()=>{
+  // User wants to watch an ad while the countdown is running
+  if(countdownInterval){
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+  adOverlay.classList.add('hidden');
+  if(activeVideo) activeVideo._wasPausedForAd = true;
+  requestRewardedAd();
+});
+
+/* -------------------------------------------------
+   ---------- Play inline video (with checkpoints) ----------
+------------------------------------------------- */
+function playInline(i){
   currentIndex = i;
   const v = videos[i];
   const items = document.querySelectorAll('.queue-item');
 
   items.forEach((el,idx)=>{
-    el.classList.toggle('active',idx===i);
+    const isActive = idx===i;
+    el.classList.toggle('active', isActive);
     const thumb = el.querySelector('.thumb');
-    if(idx===i){
+
+    if(isActive){
       thumb.innerHTML = `
         <video controls controlsList="nodownload" autoplay playsinline
-               style="width:100%;height:100%" src="${v.mp4_link}"
+               style="width:100%;height:100%"
+               src="${v.mp4_link}"
                poster="${v.archive_org_iframe_image_link}"></video>`;
     }else{
       thumb.innerHTML = '';
-      if(videos[idx]) thumb.style.backgroundImage=`url('${videos[idx].archive_org_iframe_image_link}')`;
+      if(videos[idx]) thumb.style.backgroundImage = `url('${videos[idx].archive_org_iframe_image_link}')`;
     }
   });
 
+  // scroll the selected item into view
   queueList.children[i]?.scrollIntoView({behavior:'smooth',block:'center'});
 
+  // record click for backend
   if(v.id!=null) store(Number(v.id));
 
-  // hook timeupdate after video element exists
   requestAnimationFrame(()=>{
     const active = document.querySelector('.queue-item.active');
     if(!active) return;
     const video = active.querySelector('video');
     if(!video) return;
 
+    // initialise per‑video state
     video._triggeredCheckpoints = new Set();
+    video._gateOpen = false;
     video._wasPausedForAd = false;
-    video._adPromptActive = false;
 
     const adsEnabled = shouldShowAds(v);
 
-    if(video._timeupdateListener) video.removeEventListener('timeupdate',video._timeupdateListener);
-    video._timeupdateListener = function(){
-      if(!adsEnabled) return;
-      if(video._adPromptActive) return; // already handling a checkpoint
+    // detach any previous listener
+    if(video._timeupdateListener){
+      video.removeEventListener('timeupdate',video._timeupdateListener);
+    }
 
-      for(const cp of AD_CHECKPOINTS){
-        if(video.currentTime >= cp && !video._triggeredCheckpoints.has(cp)){
-          video._triggeredCheckpoints.add(cp);
-          // pause + ask user
-          try{ video.pause(); }catch(e){ console.warn('pause fail',e); }
-          video._adPromptActive = true;
+    function onTimeUpdate(){
+      if(video._gateOpen) return;                 // a modal is already shown
+      if(!adsEnabled) return;                    // no ads for this video
 
-          // exit fullscreen if needed
-          if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
-
-          showAdModal(video);
-          break; // handle one checkpoint at a time
+      for(const checkpoint of AD_CHECKPOINTS){
+        if(video.currentTime >= checkpoint && !video._triggeredCheckpoints.has(checkpoint)){
+          video._triggeredCheckpoints.add(checkpoint);
+          // Show the “Continue Watching” dialog
+          showGate(video);
+          break; // only one checkpoint at a time
         }
       }
-    };
+    }
+    video._timeupdateListener = onTimeUpdate;
     video.addEventListener('timeupdate',video._timeupdateListener);
   });
 }
 
-/* -------------------------- Prev / Next --------------------- */
-prevBtn.onclick = ()=>{ if(videos.length) playInline((currentIndex-1+videos.length)%videos.length); };
-nextBtn.onclick = ()=>{ if(videos.length) playInline((currentIndex+1)%videos.length); };
+/* -------------------------------------------------
+   ---------- Prev / Next ----------
+------------------------------------------------- */
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
 
-/* -------------------------- Init ----------------------------- */
+prevBtn.onclick = () => {
+  if(videos.length>0) playInline((currentIndex-1+videos.length)%videos.length);
+};
+nextBtn.onclick = () => {
+  if(videos.length>0) playInline((currentIndex+1)%videos.length);
+};
+
+/* -------------------------------------------------
+   ---------- Init ----------
+------------------------------------------------- */
 (async()=>{
   await sendStoredToBackend();
   await loadVideos();
 
-  // Request a preload on app start (if native bridge exists)
+  // ask native to preload a rewarded ad as soon as the app starts
   try{
     if(hasAndroidBridge()){
-      if(typeof Android.preloadRewardedAd==='function') Android.preloadRewardedAd();
-      else if(Android.preloadRewardedAd) Android.preloadRewardedAd();
-      console.log('Requested native preload on init.');
+      if(typeof Android.preloadRewardedAd === 'function'){
+        Android.preloadRewardedAd();
+      }else if (Android.preloadRewardedAd){
+        Android.preloadRewardedAd();
+      }
+      console.log('Requested native preload of rewarded ad.');
     }else{
       console.log('Android bridge not detected – running in browser.');
     }
-  }catch(e){ console.warn('preload request failed',e); }
+  }catch(e){
+    console.warn('preload request failed',e);
+  }
 })();
 </script>
+
 </body>
 </html>
-
