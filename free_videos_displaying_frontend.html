@@ -1,645 +1,685 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>Inline Video Queue</title>
-
-<style>
-:root{
-  --bg:#0f1724;
-  --card:#0b1220;
-  --muted:#9aa6b2;
-  --accent:#06b6d4;
-  --soft:#e6eef5;
-}
-*{box-sizing:border-box}
-html,body{
-  margin:0;
-  padding:0;
-  background:linear-gradient(180deg,#071025 0%, #071827 100%);
-  color:var(--soft);
-  font-family:Arial, Helvetica, sans-serif;
-}
-body{
-  padding:16px;
-  overflow-x:hidden;
-}
-
-/* Queue Container */
-.queue{
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  overflow-y:auto;
-  max-height:100vh;
-}
-
-/* Item Card */
-.queue-item{
-  background:rgba(255,255,255,0.05);
-  border-radius:10px;
-  padding:10px;
-  cursor:pointer;
-  transition:0.15s, opacity 0.3s ease-in;
-  opacity:0;
-}
-.queue-item.visible{opacity:1;}
-.queue-item.active{
-  border:1px solid var(--accent);
-  box-shadow:0 6px 20px rgba(6,182,212,0.3);
-}
-
-/* Thumbnail */
-.thumb{
-  width:100%;
-  aspect-ratio:16/9;
-  border-radius:8px;
-  background:#000;
-  overflow:hidden;
-  background-size:cover;
-  background-position:center;
-}
-
-/* Metadata */
-.q-title{font-size:15px;font-weight:600;margin:6px 0 2px}
-.q-sub{font-size:12px;color:var(--muted)}
-.q-id{font-size:11px;color:var(--muted)}
-.q-link{font-size:12px;color:var(--soft); margin-top:4px}
-.q-link a{color:#4ecbff;text-decoration:none;}
-.q-link a:hover{text-decoration:underline;}
-
-/* Controls */
-.controls{
-  display:flex;
-  justify-content:center;
-  gap:12px;
-  padding:14px 0;
-  position:sticky;
-  bottom:10px;
-}
-.btn{
-  padding:8px 14px;
-  border-radius:8px;
-  background:rgba(255,255,255,0.08);
-  border:1px solid rgba(255,255,255,0.2);
-  color:var(--soft);
-  cursor:pointer;
-  font-size:14px;
-}
-.btn:hover{
-  background:var(--accent);
-  color:#000;
-}
-
-/* Primary/Secondary variations (used inside modal) */
-.btn.primary{
-  background:var(--accent);
-  color:#000;
-  border-color:var(--accent);
-}
-.btn.secondary{
-  background:rgba(255,255,255,0.08);
-  color:var(--soft);
-}
-
-/* Loader */
-.loader{
-  text-align:center;
-  padding:20px;
-  color:var(--muted);
-  font-size:14px;
-}
-
-/* ----------- MODAL OVERLAY ----------- */
-.ad-overlay{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,0.7);
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  z-index:9999;
-}
-.ad-overlay.hidden{display:none;}
-.ad-modal{
-  background:var(--card);
-  padding:20px;
-  border-radius:12px;
-  max-width:90%;
-  width:340px;
-  text-align:center;
-  color:var(--soft);
-}
-.ad-modal h2{
-  margin:0 0 12px;
-  font-size:20px;
-}
-.ad-modal p{
-  margin:8px 0;
-}
-.ad-buttons{
-  display:flex;
-  justify-content:space-around;
-  margin-top:15px;
-}
-.countdown-timer{
-  font-size:32px;
-  margin:8px 0;
-}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Archive Video Uploader</title>
+  <style>
+    :root {
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#60a5fa;
+      --muted:#94a3b8;
+      --text:#e6eef8;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body {
+      font-family:Inter,system-ui,Arial,sans-serif;
+      background:linear-gradient(180deg,#071024 0%,#07172a 100%);
+      color:var(--text);
+      min-height:100vh;
+      display:flex;
+      align-items:flex-start;
+      justify-content:center;
+      padding:24px;
+    }
+    .app{
+      width:100%;
+      max-width:900px;
+      background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));
+      border-radius:16px;
+      padding:20px;
+      border:1px solid rgba(255,255,255,0.03);
+      box-shadow:0 10px 30px rgba(2,6,23,0.6);
+    }
+    header{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .search{flex:1;display:flex;width:100%;max-width:600px}
+    .search input{
+      flex:1;
+      padding:12px 16px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.05);
+      background:rgba(255,255,255,0.02);
+      color:var(--text);
+      outline:none;
+      font-size:15px;
+    }
+    .search button{
+      margin-left:8px;
+      padding:10px 14px;
+      border-radius:10px;
+      border:none;
+      background:var(--accent);
+      color:#042033;
+      font-weight:600;
+      cursor:pointer;
+      transition:0.2s;
+    }
+    .search button:hover{opacity:0.9}
+    .btn{
+      padding:10px 14px;
+      border-radius:10px;
+      border:none;
+      background:rgba(255,255,255,0.03);
+      color:var(--text);
+      cursor:pointer;
+      transition:0.2s;
+    }
+    .btn:hover{background:rgba(255,255,255,0.08)}
+    .primary{background:var(--accent);color:#062235}
+    .small{font-size:13px;color:var(--muted)}
+    .page{display:none;margin-top:18px}
+    .page.active{display:block}
+    input, textarea{
+      width:100%;
+      padding:10px 12px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.04);
+      background:transparent;
+      color:var(--text);
+      outline:none;
+      font-size:15px;
+    }
+    textarea{min-height:80px;resize:vertical}
+    .row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .error{color:#ff8b8b;font-weight:600}
+    .notice{
+      background:rgba(255,255,255,0.02);
+      padding:10px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.02);
+      font-size:13px;
+    }
+    .preview{margin-top:12px;border-radius:10px;overflow:hidden;background:#000}
+    video{
+      width:100%;
+      height:auto;
+      display:block;
+      border-radius:10px;
+      pointer-events:auto;
+    }
+    video::-webkit-media-controls-enclosure { overflow:hidden; }
+    video::-webkit-media-controls-download-button { display:none !important; }
+    video::-internal-media-controls-download-button { display:none !important; }
+    video[controlslist] { controlslist: nodownload; }
+    .search-results{margin-top:24px}
+    .search-item{
+      margin-top:16px;
+      background:rgba(255,255,255,0.03);
+      border-radius:10px;
+      padding:14px;
+      transition:transform 0.2s;
+    }
+    .search-item:hover{transform:scale(1.01)}
+    .thumb{
+      width:100%;
+      border-radius:10px;
+      overflow:hidden;
+      cursor:pointer;
+    }
+    .thumb img{
+      width:100%;
+      display:block;
+      border-radius:10px;
+    }
+    .details{margin-top:8px;font-size:14px;line-height:1.5;word-wrap:break-word}
+    .details a{color:var(--accent);text-decoration:none;word-break:break-all}
+    .details a:hover{text-decoration:underline}
+    footer{display:none}
+    @media (max-width:768px){
+      body{padding:12px}
+      .app{padding:16px}
+      .row-2{grid-template-columns:1fr}
+      .search{flex-direction:column}
+      .search button{margin-left:0;margin-top:8px;width:100%}
+    }
+    /* ---------- Modal for rewarded‑ad prompt ---------- */
+    .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:10000}
+    .modal.hidden{display:none}
+    .modal-content{
+      background:var(--card);
+      padding:20px;
+      border-radius:12px;
+      text-align:center;
+      max-width:320px;
+      width:90%;
+      color:var(--text);
+    }
+  </style>
 </head>
-
 <body>
+  <main class="app" role="main">
+    <header>
+      <div class="search">
+        <input id="globalSearch" placeholder="Search by id, title or username" aria-label="Search" />
+        <button id="searchBtn">Search</button>
+      </div>
+      <button id="openUpload" class="btn primary" style="min-width:120px;">Upload</button>
+    </header>
 
-<div class="queue" id="queueList">
-  <div class="loader" id="loader">Loading videos...</div>
-</div>
+    <section class="view">
+      <div class="notice" style="margin-top:14px">Click <strong>Upload</strong> to open uploader form. All fields are mandatory.</div>
 
-<div class="controls">
-  <button class="btn" id="prevBtn">Prev</button>
-  <button class="btn" id="nextBtn">Next</button>
-</div>
+      <!-- Upload Form -->
+      <div id="uploadPage" class="page">
+        <h3 style="margin-top:16px;margin-bottom:10px">Upload to Archive</h3>
+        <form id="uploadForm" novalidate>
+          <label>Archive.org iframe / URL</label>
+          <textarea id="archiveVideo" placeholder="Paste full iframe or archive.org URL"></textarea>
 
-<!-- ==================== MODAL (added by script) ==================== -->
+          <label>Archive.org image link</label>
+          <input id="archiveImage" type="text" placeholder="https://archive.org/...jpg" />
 
-<script>
-/* -------------------------------------------------
-   Constants & Global variables
-------------------------------------------------- */
-const BACKEND = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
-const STORAGE_KEY = 'clicked_ids';
-const AD_CHECKPOINTS = [10,120,300,600,1200,1800,2400,3000,3600,4200,4800,5400,6000,6600,7200];
+          <label>Title</label>
+          <input id="title" type="text" placeholder="Video title" />
 
-const queueList = document.getElementById('queueList');
-const loader    = document.getElementById('loader');
+          <div class="row-2">
+            <div>
+              <label>Link 1</label>
+              <input id="link1" type="text" placeholder="Any link 1" />
+            </div>
+            <div>
+              <label>Link 2</label>
+              <input id="link2" type="text" placeholder="Any link 2" />
+            </div>
+          </div>
 
-let videos = [];               // all videos received from backend
-let displayedCount = 0;        // how many items already rendered
-const BATCH_SIZE = 30;         // batch size for infinite scroll
-let currentIndex = 0;          // index of video currently playing
+          <div class="row-2">
+            <div>
+              <label>Username</label>
+              <input id="username" type="text" placeholder="Uploader username" />
+            </div>
+            <div>
+              <label>Phone number</label>
+              <input id="phone" type="tel" placeholder="Phone number" />
+            </div>
+          </div>
 
-let activeVideo = null;        // video element that is currently active/in‑gate
+          <div class="meta small">All fields required. We'll auto-generate MP4 link.</div>
 
-/* -------------------------------------------------
-   ---------- LocalStorage helpers ----------
-------------------------------------------------- */
-function getStoredIds(){
-  try{
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  }catch{ return []; }
-}
-function store(id){
-  const ids = new Set(getStoredIds());
-  ids.add(Number(id));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
-}
-function clearStored(){ localStorage.removeItem(STORAGE_KEY); }
+          <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button id="previewBtn" type="button" class="btn">Preview MP4</button>
+            <button id="postBtn" type="submit" class="btn primary">Post</button>
+            <div id="formStatus" class="small" style="margin-left:8px;min-height:18px"></div>
+          </div>
 
-/* -------------------------------------------------
-   ---------- Send stored clicks to backend ----------
-------------------------------------------------- */
-async function sendStoredToBackend(){
-  const ids = getStoredIds();
-  if(ids.length===0) return;
-  try{
-    await fetch(`${BACKEND}/clicked_videos`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({video_ids:ids})
+          <div id="previewArea" class="preview" style="display:none;margin-top:12px">
+            <video id="previewVideo" controls playsinline controlslist="nodownload"></video>
+          </div>
+        </form>
+      </div>
+
+      <!-- Search Results -->
+      <div id="searchResults" class="search-results"></div>
+    </section>
+  </main>
+
+  <!-- ---------- Rewarded‑Ad Prompt Modal ---------- -->
+  <div id="adModal" class="modal hidden">
+    <div class="modal-content">
+      <p id="modalMessage">You have reached an ad point. Choose an option:</p>
+
+      <button id="watchAdBtn" class="btn primary">Watch Ad</button>
+
+      <div id="waitSection" style="margin-top:12px">
+        <button id="waitAdBtn" class="btn">Wait 45 seconds</button>
+      </div>
+
+      <div id="countdownSection" class="hidden" style="margin-top:12px">
+        <p class="small">Resuming in <span id="countdownNumber">45</span> seconds.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* -------------------------------------------------------------------------
+   *  Constants & simple helpers
+   * ----------------------------------------------------------------------- */
+  const BACKEND_UPLOAD = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/upload';
+  const BACKEND_SEARCH = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/search';
+  const BACKEND_SEND_IDS = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/increment-ads';
+  const STORAGE_KEY = 'watched_videos';
+
+  /* -------------------------------------------------------------------------
+   *  Global state for rewarded‑ad handling
+   * ----------------------------------------------------------------------- */
+  let currentAdVideo = null;                     // video that is paused for an ad
+  const AD_BASE_MILESTONES = [10, 120, 300, 600, 1200, 1800, 2400, 3000]; // up to 50 min
+  const AD_REPEAT_INTERVAL = 600;                // every 10 min after 50 min
+
+  // timer used while user waits 45 s
+  let adPromptTimer = null;
+
+  /* -------------------------------------------------------------------------
+   *  Utility functions
+   * ----------------------------------------------------------------------- */
+  function extractArchiveId(input) {
+    if (!input) return null;
+    const iframeMatch = input.match(/src\s*=\s*"([^"]+)"/i);
+    const url = iframeMatch ? iframeMatch[1] : input.trim();
+    const clean = url.split('?')[0];
+    const patterns = [
+      /archive\.org\/embed\/([^\/\?\s]+)/i,
+      /archive\.org\/details\/([^\/\?\s]+)/i,
+      /archive\.org\/download\/([^\/\?\s]+)/i
+    ];
+    for (const p of patterns) {
+      const m = clean.match(p);
+      if (m && m[1]) return decodeURIComponent(m[1]);
+    }
+    return null;
+  }
+
+  async function getMp4FromMetadata(id) {
+    const res = await fetch(`https://archive.org/metadata/${id}`);
+    if (!res.ok) throw new Error('Metadata not found');
+    const data = await res.json();
+    const file = data?.files?.find(f => f.name.toLowerCase().endsWith('.mp4'));
+    if (!file) throw new Error('No MP4 found');
+    return `https://archive.org/download/${id}/${encodeURIComponent(file.name)}`;
+  }
+
+  function getStoredVideoIds() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function storeVideoId(id) {
+    if (!id) return;
+    let ids = getStoredVideoIds();
+    if (!ids.includes(id)) {
+      ids.push(id);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+      console.log('Stored unique video ID:', id);
+    } else {
+      console.log('Duplicate ignored:', id);
+    }
+  }
+
+  function clearStoredVideoIds() {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  /* -------------------------------------------------------------------------
+   *  Send stored IDs to backend (unchanged from original)
+   * ----------------------------------------------------------------------- */
+  let sendInProgress = false;
+  async function sendStoredVideoIds() {
+    if (sendInProgress) return;
+    const ids = [...new Set(getStoredVideoIds())];
+    if (ids.length === 0) return;
+    sendInProgress = true;
+    try {
+      const res = await fetch(BACKEND_SEND_IDS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_ids: ids })
+      });
+      if (res.ok) clearStoredVideoIds();
+    } catch (err) {
+      console.error('Error sending IDs:', err);
+    } finally {
+      sendInProgress = false;
+    }
+  }
+
+  window.addEventListener('load', () => setTimeout(sendStoredVideoIds, 400));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') setTimeout(sendStoredVideoIds, 250);
+  });
+
+  /* -------------------------------------------------------------------------
+   *  Rewarded‑ad native bridge callbacks (JS side)
+   * ----------------------------------------------------------------------- */
+  function onAdPreloaded() {
+    console.log('✅ Rewarded ad preloaded');
+  }
+  function onAdFailedToPreload() {
+    console.warn('⚠️ Rewarded ad failed to preload');
+  }
+  function onAdNotAvailable() {
+    console.warn('⚠️ Rewarded ad not available');
+    if (currentAdVideo) {
+      currentAdVideo.play();
+      currentAdVideo = null;
+    }
+  }
+  function onAdCompleted(url) {
+    console.log('✅ Rewarded ad completed', url);
+    if (currentAdVideo) {
+      currentAdVideo.play();
+      currentAdVideo = null;
+    }
+    if (window.Android && typeof Android.preloadRewardedAd === 'function') {
+      Android.preloadRewardedAd();
+    }
+  }
+  function setAndroidId(id) {
+    console.log('Received Android ID from native code:', id);
+  }
+
+  /* -------------------------------------------------------------------------
+   *  Helper to exit fullscreen (if any)
+   * ----------------------------------------------------------------------- */
+  function exitFullScreenIfNeeded(callback) {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      const exit = document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      Promise.resolve(exit).then(() => {
+        if (callback) callback();
+      });
+    } else {
+      if (callback) callback();
+    }
+  }
+
+  /* -------------------------------------------------------------------------
+   *  Modal handling – show prompt, wait, cancel, request ad
+   * ----------------------------------------------------------------------- */
+  function showAdPrompt(video) {
+    // Take the user out of fullscreen first (if needed)
+    exitFullScreenIfNeeded(() => {
+      // Pause the video and keep a reference for later
+      video.pause();
+      currentAdVideo = video;
+
+      // Populate modal with the video‑ID (used when requesting the ad)
+      const modal = document.getElementById('adModal');
+      modal.dataset.videoId = video.dataset.videoId || '';
+
+      // Reset UI to its initial state
+      document.getElementById('waitSection').classList.remove('hidden');
+      document.getElementById('countdownSection').classList.add('hidden');
+      document.getElementById('countdownNumber').textContent = '45';
+
+      // Show modal
+      modal.classList.remove('hidden');
     });
-    console.log('Sent to backend:',ids);
-    clearStored();
-  }catch(err){
-    console.error('Failed to send ids:',err);
   }
-}
 
-/* -------------------------------------------------
-   ---------- Load all videos once ----------
-------------------------------------------------- */
-async function loadVideos(){
-  loader.textContent = "Fetching videos...";
-  try{
-    const res = await fetch(BACKEND);
-    videos = await res.json();
-    loader.remove();
-    renderNextBatch();
-  }catch{
-    loader.textContent = "❌ Failed to load videos from backend";
-  }
-}
+  /* ---- watch‑ad button (available at all times) ---- */
+  document.getElementById('watchAdBtn').addEventListener('click', () => {
+    const modal = document.getElementById('adModal');
+    const videoId = modal.dataset.videoId;
 
-/* -------------------------------------------------
-   ---------- Render next batch ----------
-------------------------------------------------- */
-function renderNextBatch(){
-  const nextBatch = videos.slice(displayedCount, displayedCount + BATCH_SIZE);
-  displayedCount += nextBatch.length;
-
-  nextBatch.forEach((v,i)=>{
-    const card = document.createElement('div');
-    card.className = 'queue-item';
-    const absoluteIndex = (displayedCount - nextBatch.length) + i;
-
-    card.innerHTML = `
-      <div class="thumb" style="background-image:url('${v.archive_org_iframe_image_link||""}')"></div>
-      <div class="q-title">${v.title || "Untitled"}</div>
-      <div class="q-sub">By ${v.username || "Unknown"}</div>
-      <div class="q-id">ID: ${v.id || "?"}</div>
-
-      <div class="q-link">Link 1: <a href="${v.link_1}" target="_blank">${v.link_1 || "No link"}</a></div>
-      <div class="q-link">Link 2: <a href="${v.link_2}" target="_blank">${v.link_2 || "No link"}</a></div>
-    `;
-    card.onclick = () => playInline(absoluteIndex);
-    queueList.appendChild(card);
-    requestAnimationFrame(()=>card.classList.add('visible'));
-  });
-
-  if(displayedCount >= videos.length){
-    const endMsg = document.createElement('div');
-    endMsg.className = 'loader';
-    endMsg.textContent = "🎉 All videos loaded";
-    queueList.appendChild(endMsg);
-  }
-}
-
-/* -------------------------------------------------
-   ---------- Infinite‑scroll ----------
-------------------------------------------------- */
-queueList.addEventListener('scroll',()=>{
-  const bottomReached = queueList.scrollTop + queueList.clientHeight >= queueList.scrollHeight - 150;
-  if(bottomReached && displayedCount < videos.length){
-    renderNextBatch();
-  }
-});
-
-/* -------------------------------------------------
-   ---------- Helpers ----------
-------------------------------------------------- */
-function hasAndroidBridge(){
-  return (typeof Android !== 'undefined' && Android !== null);
-}
-function shouldShowAds(videoData){
-  return videoData.phone_number != null && videoData.phone_number !== '' && videoData.phone_number !== 'NULL';
-}
-
-/* -------------------------------------------------
-   ---------- Native callbacks ----------
-------------------------------------------------- */
-window.onAdPreloaded = function(){
-  console.log('onAdPreloaded()');
-};
-window.onAdFailedToPreload = function(){
-  console.warn('onAdFailedToPreload()');
-};
-window.onAdNotAvailable = function(){
-  console.warn('onAdNotAvailable() – resuming video (no ad).');
-  if(activeVideo){
-    activeVideo._gateOpen = false;
-    if(activeVideo._wasPausedForAd){
-      activeVideo._wasPausedForAd = false;
-      activeVideo.play().catch(()=>{});
+    // Cancel any waiting timer
+    if (adPromptTimer) {
+      clearInterval(adPromptTimer);
+      adPromptTimer = null;
     }
-  }
-};
-window.onAdCompleted = function(targetUrl){
-  console.log('onAdCompleted() ->',targetUrl);
-  // 1‑second reward toast
-  showRewardToast();
 
-  // Resume the video that was paused for the ad
-  if(activeVideo){
-    activeVideo._gateOpen = false;
-    if(activeVideo._wasPausedForAd){
-      activeVideo._wasPausedForAd = false;
-      activeVideo.play().catch(()=>{});
-    }
-  }
-  // Hide modal (in case it is still visible)
-  if(!adOverlay.classList.contains('hidden')){
-    adOverlay.classList.add('hidden');
-  }
+    modal.classList.add('hidden');
 
-  // Pre‑load the next ad
-  try{
-    if(hasAndroidBridge()){
-      if(typeof Android.preloadRewardedAd === 'function'){
-        Android.preloadRewardedAd();
-      }else if(Android.preloadRewardedAd){
-        Android.preloadRewardedAd();
+    // Request the rewarded ad via the Android bridge
+    if (window.Android && typeof Android.requestRewardedAd === 'function') {
+      Android.requestRewardedAd(videoId);
+    } else {
+      console.warn('Android bridge not available – cannot request rewarded ad');
+      // Fallback: simply resume playback
+      if (currentAdVideo) {
+        currentAdVideo.play();
+        currentAdVideo = null;
       }
-    }
-  }catch(e){ console.warn('preload after ad error',e); }
-
-  // Open optional target URL
-  if(targetUrl && targetUrl !== 'null' && targetUrl !== ''){
-    try{
-      if(hasAndroidBridge()){
-        if(typeof Android.loadUrlInWebView === 'function'){
-          Android.loadUrlInWebView(targetUrl);
-        }else if(Android.loadUrlInWebView){
-          Android.loadUrlInWebView(targetUrl);
-        }else{
-          window.location.href = targetUrl;
-        }
-      }else{
-        window.location.href = targetUrl;
-      }
-    }catch(e){ console.error('failed to open targetUrl',e); }
-  }
-};
-
-/* -------------------------------------------------
-   ---------- Modal (Continue Watching) ----------
-------------------------------------------------- */
-const adOverlay = document.createElement('div');
-adOverlay.id = 'adOverlay';
-adOverlay.className = 'ad-overlay hidden';
-adOverlay.innerHTML = `
-  <div class="ad-modal">
-    <h2 id="adTitle">Continue Watching</h2>
-    <p id="adMessage">
-      To continue watching this video, please watch a short advertisement.<br>
-      This helps us support the service and keep the content available.
-    </p>
-
-    <div id="countdownContainer" style="display:none;">
-      <p>Please wait</p>
-      <p id="countdownMessage">
-        The video is currently paused. You can continue watching after the countdown finishes.
-      </p>
-      <div class="countdown-timer" id="timerDisplay">45</div>
-      <button class="btn primary" id="watchAdDuringCountdownBtn">Watch Ad</button>
-    </div>
-
-    <div class="ad-buttons">
-      <button class="btn primary" id="watchAdBtn">Watch Ad</button>
-      <button class="btn secondary" id="cancelBtn">Cancel</button>
-    </div>
-  </div>`;
-document.body.appendChild(adOverlay);
-
-const watchAdBtn               = document.getElementById('watchAdBtn');
-const cancelBtn               = document.getElementById('cancelBtn');
-const watchAdDuringCountdownBtn = document.getElementById('watchAdDuringCountdownBtn');
-const countdownContainer      = document.getElementById('countdownContainer');
-const timerDisplay            = document.getElementById('timerDisplay');
-
-let countdownInterval = null;
-let countdownRemaining = 45;
-
-/* -------------------------------------------------
-   ---------- Helper: exit fullscreen ----------
-------------------------------------------------- */
-function exitFullScreen(){
-  if (document.fullscreenElement){
-    document.exitFullscreen().catch(()=>{});
-  }else if (document.webkitFullscreenElement){
-    document.webkitExitFullscreen && document.webkitExitFullscreen();
-  }else if (document.mozFullScreenElement){
-    document.mozCancelFullScreen && document.mozCancelFullScreen();
-  }else if (document.msFullscreenElement){
-    document.msExitFullscreen && document.msExitFullscreen();
-  }
-}
-
-/* -------------------------------------------------
-   ---------- Show modal (gate) ----------
-------------------------------------------------- */
-function showGate(video){
-  video._gateOpen = true;
-  activeVideo = video;
-  // pause video immediately
-  try{ video.pause(); }catch(e){}
-  // leave fullscreen so that the modal is fully visible
-  exitFullScreen();
-
-  // reset UI to the default (watch / cancel)
-  document.getElementById('watchAdBtn').style.display   = 'inline-block';
-  document.getElementById('cancelBtn').style.display    = 'inline-block';
-  countdownContainer.style.display = 'none';
-  adOverlay.classList.remove('hidden');
-}
-
-/* -------------------------------------------------
-   ---------- Countdown after Cancel ----------
-------------------------------------------------- */
-function startCountdown(){
-  // hide primary/secondary buttons
-  document.getElementById('watchAdBtn').style.display = 'none';
-  document.getElementById('cancelBtn').style.display  = 'none';
-  // show countdown UI
-  countdownContainer.style.display = 'block';
-  countdownRemaining = 45;
-  timerDisplay.textContent = countdownRemaining;
-
-  countdownInterval = setInterval(()=>{
-    countdownRemaining--;
-    if(countdownRemaining <= 0){
-      clearInterval(countdownInterval);
-      countdownInterval = null;
-      // countdown finished -> resume playback
-      hideGateAndResume();
-    }else{
-      timerDisplay.textContent = countdownRemaining;
-    }
-  },1000);
-}
-
-/* -------------------------------------------------
-   ---------- Hide modal & resume video ----------
-------------------------------------------------- */
-function hideGateAndResume(){
-  adOverlay.classList.add('hidden');
-  if(activeVideo){
-    activeVideo._gateOpen = false;
-    activeVideo.play().catch(()=>{});
-  }
-  activeVideo = null;
-  if(countdownInterval){
-    clearInterval(countdownInterval);
-    countdownInterval = null;
-  }
-}
-
-/* -------------------------------------------------
-   ---------- Request native rewarded ad ----------
-------------------------------------------------- */
-function requestRewardedAd(){
-  try{
-    if(hasAndroidBridge()){
-      if(typeof Android.requestRewardedAd === 'function'){
-        Android.requestRewardedAd(activeVideo ? (activeVideo.currentSrc || activeVideo.src) : '');
-      }else if (Android.requestRewardedAd){
-        Android.requestRewardedAd(activeVideo ? (activeVideo.currentSrc || activeVideo.src) : '');
-      }
-    }else{
-      // -------------------------------------------------
-      // Simulate ad flow when running in a normal browser
-      // -------------------------------------------------
-      console.warn('Android bridge not detected – simulating ad.');
-      setTimeout(()=>{ window.onAdCompleted(null); },1500);
-    }
-  }catch(e){
-    console.error('requestRewardedAd error',e);
-    // Ensure video can continue even if the native call failed
-    if(activeVideo){
-      activeVideo._gateOpen = false;
-      activeVideo.play().catch(()=>{});
-    }
-  }
-}
-
-/* -------------------------------------------------
-   ---------- Toast (1‑second reward) ----------
-------------------------------------------------- */
-function showRewardToast(){
-  const toast = document.createElement('div');
-  toast.textContent = 'Reward granted!';
-  toast.style.position = 'fixed';
-  toast.style.bottom = '20px';
-  toast.style.right = '20px';
-  toast.style.background = 'rgba(0,0,0,0.8)';
-  toast.style.color = '#fff';
-  toast.style.padding = '8px 12px';
-  toast.style.borderRadius = '5px';
-  toast.style.zIndex = '10000';
-  document.body.appendChild(toast);
-  setTimeout(()=>{ toast.remove(); },1000);
-}
-
-/* -------------------------------------------------
-   ---------- Modal button listeners ----------
-------------------------------------------------- */
-watchAdBtn.addEventListener('click',()=>{
-  // User agreed to watch the ad
-  adOverlay.classList.add('hidden');
-  if(activeVideo) activeVideo._wasPausedForAd = true;
-  requestRewardedAd();
-});
-
-cancelBtn.addEventListener('click',()=>{
-  // User cancelled – start the 45‑second wait
-  startCountdown();
-});
-
-watchAdDuringCountdownBtn.addEventListener('click',()=>{
-  // User wants to watch an ad while the countdown is running
-  if(countdownInterval){
-    clearInterval(countdownInterval);
-    countdownInterval = null;
-  }
-  adOverlay.classList.add('hidden');
-  if(activeVideo) activeVideo._wasPausedForAd = true;
-  requestRewardedAd();
-});
-
-/* -------------------------------------------------
-   ---------- Play inline video (with checkpoints) ----------
-------------------------------------------------- */
-function playInline(i){
-  currentIndex = i;
-  const v = videos[i];
-  const items = document.querySelectorAll('.queue-item');
-
-  items.forEach((el,idx)=>{
-    const isActive = idx===i;
-    el.classList.toggle('active', isActive);
-    const thumb = el.querySelector('.thumb');
-
-    if(isActive){
-      thumb.innerHTML = `
-        <video controls controlsList="nodownload" autoplay playsinline
-               style="width:100%;height:100%"
-               src="${v.mp4_link}"
-               poster="${v.archive_org_iframe_image_link}"></video>`;
-    }else{
-      thumb.innerHTML = '';
-      if(videos[idx]) thumb.style.backgroundImage = `url('${videos[idx].archive_org_iframe_image_link}')`;
     }
   });
 
-  // scroll the selected item into view
-  queueList.children[i]?.scrollIntoView({behavior:'smooth',block:'center'});
+  /* ---- wait‑45‑seconds button ---- */
+  document.getElementById('waitAdBtn').addEventListener('click', () => {
+    // Hide the wait button, show the countdown area
+    document.getElementById('waitSection').classList.add('hidden');
+    document.getElementById('countdownSection').classList.remove('hidden');
 
-  // record click for backend
-  if(v.id!=null) store(Number(v.id));
+    let remaining = 45;
+    const countdownEl = document.getElementById('countdownNumber');
+    countdownEl.textContent = remaining;
 
-  requestAnimationFrame(()=>{
-    const active = document.querySelector('.queue-item.active');
-    if(!active) return;
-    const video = active.querySelector('video');
-    if(!video) return;
+    if (adPromptTimer) clearInterval(adPromptTimer);
+    adPromptTimer = setInterval(() => {
+      remaining--;
+      countdownEl.textContent = remaining;
+      if (remaining <= 0) {
+        clearInterval(adPromptTimer);
+        adPromptTimer = null;
 
-    // initialise per‑video state
-    video._triggeredCheckpoints = new Set();
-    video._gateOpen = false;
-    video._wasPausedForAd = false;
+        // Hide modal and resume the video
+        document.getElementById('adModal').classList.add('hidden');
+        // Reset UI sections for potential next use
+        document.getElementById('waitSection').classList.remove('hidden');
+        document.getElementById('countdownSection').classList.add('hidden');
 
-    const adsEnabled = shouldShowAds(v);
-
-    // detach any previous listener
-    if(video._timeupdateListener){
-      video.removeEventListener('timeupdate',video._timeupdateListener);
-    }
-
-    function onTimeUpdate(){
-      if(video._gateOpen) return;                 // a modal is already shown
-      if(!adsEnabled) return;                    // no ads for this video
-
-      for(const checkpoint of AD_CHECKPOINTS){
-        if(video.currentTime >= checkpoint && !video._triggeredCheckpoints.has(checkpoint)){
-          video._triggeredCheckpoints.add(checkpoint);
-          // Show the “Continue Watching” dialog
-          showGate(video);
-          break; // only one checkpoint at a time
+        if (currentAdVideo) {
+          currentAdVideo.play();
+          currentAdVideo = null;
         }
       }
-    }
-    video._timeupdateListener = onTimeUpdate;
-    video.addEventListener('timeupdate',video._timeupdateListener);
+    }, 1000);
   });
-}
 
-/* -------------------------------------------------
-   ---------- Prev / Next ----------
-------------------------------------------------- */
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
-
-prevBtn.onclick = () => {
-  if(videos.length>0) playInline((currentIndex-1+videos.length)%videos.length);
-};
-nextBtn.onclick = () => {
-  if(videos.length>0) playInline((currentIndex+1)%videos.length);
-};
-
-/* -------------------------------------------------
-   ---------- Init ----------
-------------------------------------------------- */
-(async()=>{
-  await sendStoredToBackend();
-  await loadVideos();
-
-  // ask native to preload a rewarded ad as soon as the app starts
-  try{
-    if(hasAndroidBridge()){
-      if(typeof Android.preloadRewardedAd === 'function'){
-        Android.preloadRewardedAd();
-      }else if (Android.preloadRewardedAd){
-        Android.preloadRewardedAd();
-      }
-      console.log('Requested native preload of rewarded ad.');
-    }else{
-      console.log('Android bridge not detected – running in browser.');
+  /* -------------------------------------------------------------------------
+   *  Reward‑ad tracking per video (modified to use the prompt)
+   * ----------------------------------------------------------------------- */
+  function setupRewardedAdTracking(video) {
+    // Skip videos without a phone number (no ads)
+    const phoneNumber = video.dataset.phoneNumber;
+    if (!phoneNumber || phoneNumber === 'NULL' || phoneNumber === 'null') {
+      return;
     }
-  }catch(e){
-    console.warn('preload request failed',e);
-  }
-})();
-</script>
 
+    // Initialise per‑video ad state if not present
+    if (!video._adState) {
+      video._adState = {
+        milestones: AD_BASE_MILESTONES.slice(),
+        repeatInterval: AD_REPEAT_INTERVAL,
+        nextIdx: 0
+      };
+    }
+
+    const state = video._adState;
+
+    video.addEventListener('timeupdate', () => {
+      const current = Math.floor(video.currentTime);
+      let target;
+
+      if (state.nextIdx < state.milestones.length) {
+        target = state.milestones[state.nextIdx];
+      } else {
+        const extraSteps = state.nextIdx - state.milestones.length + 1;
+        target = state.milestones[state.milestones.length - 1] + extraSteps * state.repeatInterval;
+      }
+
+      if (current >= target) {
+        // Move on to the next milestone so we don’t fire again for this point
+        state.nextIdx++;
+
+        // Instead of playing the ad instantly, show the user prompt
+        showAdPrompt(video);
+      }
+    });
+  }
+
+  /* -------------------------------------------------------------------------
+   *  UI interactions (upload, preview, etc.)
+   * ----------------------------------------------------------------------- */
+  document.getElementById('openUpload').addEventListener('click', () => {
+    document.getElementById('uploadPage').classList.toggle('active');
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  });
+
+  document.getElementById('previewBtn').addEventListener('click', async () => {
+    const id = extractArchiveId(document.getElementById('archiveVideo').value);
+    const formStatus = document.getElementById('formStatus');
+    if (!id) return formStatus.innerHTML = '<span class="error">Invalid Archive.org link</span>';
+    try {
+      const mp4 = await getMp4FromMetadata(id);
+      document.getElementById('previewVideo').src = mp4;
+      document.getElementById('previewArea').style.display = 'block';
+      formStatus.textContent = 'Preview ready ✔️';
+    } catch (err) {
+      formStatus.innerHTML = `<span class="error">${err.message}</span>`;
+    }
+  });
+
+  // Upload handler (unchanged apart from a tiny refactor)
+  document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formStatus = document.getElementById('formStatus');
+    const archiveVideo = document.getElementById('archiveVideo').value.trim();
+    const archiveImage = document.getElementById('archiveImage').value.trim();
+    const title = document.getElementById('title').value.trim();
+    const link1 = document.getElementById('link1').value.trim();
+    const link2 = document.getElementById('link2').value.trim();
+    const username = document.getElementById('username').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+
+    if (![archiveVideo, archiveImage, title, link1, link2, username, phone].every(Boolean))
+      return formStatus.innerHTML = '<span class="error">All fields required.</span>';
+
+    if (!/^https?:\/\/(www\.)?archive\.org\//i.test(archiveImage)) {
+      return formStatus.innerHTML = '<span class="error">Image link must be from archive.org</span>';
+    }
+
+    const id = extractArchiveId(archiveVideo);
+    if (!id) return formStatus.innerHTML = '<span class="error">Invalid archive link.</span>';
+
+    try {
+      formStatus.textContent = 'Fetching MP4...';
+      const mp4_link = await getMp4FromMetadata(id);
+      const payload = {
+        mp4_link,
+        archive_org_iframe_image_link: archiveImage,
+        title,
+        link_1: link1,
+        link_2: link2,
+        username,
+        phone_number: phone
+      };
+      const res = await fetch(BACKEND_UPLOAD, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) formStatus.innerHTML = '<strong>✅ Uploaded successfully!</strong>';
+      else formStatus.innerHTML = `<span class="error">Upload failed: ${res.status}</span>`;
+    } catch (err) {
+      formStatus.innerHTML = `<span class="error">${err.message}</span>`;
+    }
+  });
+
+  /* -------------------------------------------------------------------------
+   *  Search & video rendering
+   * ----------------------------------------------------------------------- */
+  document.getElementById('searchBtn').addEventListener('click', async () => {
+    const q = document.getElementById('globalSearch').value.trim();
+    const searchResults = document.getElementById('searchResults');
+    if (!q) return alert('Type id/title/username to search.');
+    searchResults.innerHTML = '<div class="small">Searching...</div>';
+
+    try {
+      const res = await fetch(BACKEND_SEARCH + '?search=' + encodeURIComponent(q));
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      const videos = Array.isArray(data) ? data : (data.id ? [data] : []);
+      if (videos.length === 0) {
+        searchResults.innerHTML = '<div class="small">No results found.</div>';
+        return;
+      }
+
+      // Render each video entry
+      searchResults.innerHTML = videos.map(v => `
+        <div class="search-item">
+          <div class="thumb" id="thumb-${v.id}">
+            <img src="${v.archive_org_iframe_image_link}" alt="Thumbnail" />
+          </div>
+          <div class="video" id="video-${v.id}" style="display:none;margin-top:12px">
+            <video
+              src="${v.mp4_link}"
+              controls
+              playsinline
+              controlslist="nodownload"
+              data-video-id="${v.id}"
+              data-phone-number="${v.phone_number ? v.phone_number : ''}"
+            ></video>
+          </div>
+          <div class="details">
+            <strong>ID:</strong> ${v.id}<br>
+            <strong>Title:</strong> ${v.title}<br>
+            <strong>Link 1:</strong> <a href="${v.link_1}" target="_blank">${v.link_1}</a><br>
+            <strong>Link 2:</strong> <a href="${v.link_2}" target="_blank">${v.link_2}</a><br>
+            <strong>Username:</strong> ${v.username}
+          </div>
+        </div>
+      `).join('');
+
+      // Attach behaviours for each video card
+      videos.forEach(v => {
+        const thumb   = document.getElementById(`thumb-${v.id}`);
+        const videoEl = document.getElementById(`video-${v.id}`);
+        const video   = videoEl.querySelector('video');
+
+        // Show video when thumbnail is clicked
+        thumb.addEventListener('click', () => {
+          document.querySelectorAll('.search-item .video').forEach(c => c.style.display = 'none');
+          document.querySelectorAll('.search-item .thumb').forEach(t => t.style.display = 'block');
+          thumb.style.display = 'none';
+          videoEl.style.display = 'block';
+        });
+
+        // Pause other videos when a new one starts
+        video.addEventListener('play', () => {
+          document.querySelectorAll('video').forEach(vid => {
+            if (vid !== video) {
+              try { vid.pause(); vid.currentTime = 0; } catch(e){}
+              const container = vid.closest('.video');
+              if (container) container.style.display = 'none';
+              const thumbDiv = container ? container.previousElementSibling : null;
+              if (thumbDiv) thumbDiv.style.display = 'block';
+            }
+          });
+        });
+
+        // Store video ID for analytics (unchanged)
+        video.addEventListener('playing', () => storeVideoId(v.id));
+
+        // Initialise rewarded‑ad tracking for this video
+        setupRewardedAdTracking(video);
+      });
+    } catch (err) {
+      searchResults.innerHTML = `<div class="error">${err.message}</div>`;
+    }
+  });
+
+  /* -------------------------------------------------------------------------
+   *  Global play listener – keep the original ID‑storing behaviour
+   * ----------------------------------------------------------------------- */
+  document.addEventListener('play', e => {
+    if (e.target && e.target.tagName === 'VIDEO') {
+      const vid = e.target.getAttribute('data-video-id') || e.target.src || null;
+      if (vid) storeVideoId(vid);
+    }
+  }, true);
+
+  /* -------------------------------------------------------------------------
+   *  Initial native bridge actions (pre‑load ad, ask for Android ID)
+   * ----------------------------------------------------------------------- */
+  window.addEventListener('load', () => {
+    // Pre‑load a rewarded ad for the first time
+    if (window.Android && typeof Android.preloadRewardedAd === 'function') {
+      Android.preloadRewardedAd();
+    }
+    // (Optional) ask the native side for the device ID
+    if (window.Android && typeof Android.getAndroidId === 'function') {
+      Android.getAndroidId();
+    }
+  });
+  </script>
 </body>
 </html>
