@@ -164,7 +164,7 @@ body{
   <div class="loader" id="loader">Loading videos...</div>
 </div>
 
-<!-- overlay used for all dialogs (pre‑ad prompt, countdown, loading, reward) -->
+<!-- overlay for prompts, countdowns and reward toast -->
 <div class="overlay" id="modalOverlay"></div>
 
 <div class="controls">
@@ -176,7 +176,6 @@ body{
 /* ----------------------------- CONFIG ----------------------------- */
 const BACKEND = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
 const STORAGE_KEY = 'clicked_ids';
-/* ad checkpoints (seconds) */
 const AD_CHECKPOINTS = [10,120,300,600,1200,1800,2400,3000,3600,4200,4800,5400,6000,6600,7200];
 
 /* -------------------------- GLOBAL STATE -------------------------- */
@@ -184,16 +183,15 @@ const queueList = document.getElementById('queueList');
 const loader    = document.getElementById('loader');
 const overlay   = document.getElementById('modalOverlay');
 
-let videos          = [];
-let displayedCount  = 0;
-const BATCH_SIZE   = 30;
-let currentIndex   = 0;
+let videos = [];
+let displayedCount = 0;
+const BATCH_SIZE = 30;
 
-let preAdPending    = false;          // true while we wait for a rewarded‑ad to finish
-let pendingPlayIndex = null;         // index of video that should resume after ad
-let currentVideoElement = null;      // <video> element currently active
-let currentVideoIndex  = null;      // its index in the array
-let countdownInterval = null;      // reference to the 45‑second timer
+let currentIndex = 0;                // used by Prev/Next buttons
+let preAdPending = false;            // true while we wait for a rewarded‑ad to finish
+let pendingPlayIndex = null;         // index of the video that should resume after ad
+let currentVideoElement = null;       // <video> element currently active
+let countdownInterval = null;       // reference to the 45‑second timer
 
 /* -------------------------- LOCAL STORAGE -------------------------- */
 function getStoredIds(){
@@ -282,7 +280,7 @@ function hasAndroidBridge(){
   return (typeof Android !== 'undefined' && Android !== null);
 }
 
-/* simulate ad when native bridge is missing */
+/* simulate ad when no bridge is present (useful for testing in a browser) */
 function simulateAd(){
   console.warn('Simulating rewarded ad (no Android bridge)…');
   setTimeout(()=>{ window.onAdCompleted(null); },2000);
@@ -298,7 +296,7 @@ function hideOverlay(){
   overlay.innerHTML = '';
 }
 
-/* --------------------------- PROMPT/DIALOGS --------------------------- */
+/* --------------------------- PROMPT / COUNTDOWN --------------------------- */
 function showContinueWatchingPrompt(onChoice){
   const html = `
     <h2>Continue Watching</h2>
@@ -313,7 +311,7 @@ function showContinueWatchingPrompt(onChoice){
   document.getElementById('cancelBtn').onclick = () => onChoice(false);
 }
 
-/* countdown shown when user cancels the ad request */
+/* pause‑countdown that appears when the user clicks “Cancel” */
 function showPauseCountdownOverlay(videoEl, videoIdx){
   let remaining = 45;
   const html = `
@@ -345,13 +343,12 @@ function showPauseCountdownOverlay(videoEl, videoIdx){
     }
     preAdPending = true;
     pendingPlayIndex = videoIdx;
-    hideOverlay();
-    showOverlay('<p>Loading advertisement…</p>');
-    requestRewardedAd();
+    hideOverlay();               // remove the countdown UI
+    requestRewardedAd();          // directly request the ad – no loading screen
   };
 }
 
-/* request a rewarded ad from the native side (or simulate) */
+/* --------------------------- REWARDED‑AD REQUEST --------------------------- */
 function requestRewardedAd(){
   if(currentVideoElement) currentVideoElement._wasPausedForAd = true;
   try{
@@ -376,7 +373,7 @@ function requestRewardedAd(){
 
 /* ---------------------------- VIDEO PLAYBACK ---------------------------- */
 function playInline(i){
-  // clean up any previous UI state
+  // clean up any stale UI / timers
   hideOverlay();
   if(countdownInterval){
     clearInterval(countdownInterval);
@@ -385,7 +382,7 @@ function playInline(i){
   preAdPending = false;
   pendingPlayIndex = null;
 
-  currentVideoIndex = i;
+  currentIndex = i;            // update Prev/Next tracking
   const v = videos[i];
   const items = document.querySelectorAll('.queue-item');
 
@@ -407,15 +404,14 @@ function playInline(i){
   queueList.children[i]?.scrollIntoView({behavior:'smooth',block:'center'});
   if(v.id!=null) store(Number(v.id));
 
+  // attach ad‑checkpoint logic
   requestAnimationFrame(()=>{
     const active = document.querySelector('.queue-item.active');
     if(!active) return;
     const videoEl = active.querySelector('video');
     if(!videoEl) return;
 
-    // store reference for ad requests
     currentVideoElement = videoEl;
-
     videoEl._triggeredCheckpoints = new Set();
     videoEl._wasPausedForAd = false;
 
@@ -427,24 +423,22 @@ function playInline(i){
       for(const checkpoint of AD_CHECKPOINTS){
         if(videoEl.currentTime >= checkpoint && !videoEl._triggeredCheckpoints.has(checkpoint)){
           videoEl._triggeredCheckpoints.add(checkpoint);
-          // pause and ask the user what to do
           videoEl.pause();
           showContinueWatchingPrompt((watchAd) => {
             if(watchAd){
               preAdPending = true;
               pendingPlayIndex = i;
-              showOverlay('<p>Loading advertisement…</p>');
-              requestRewardedAd();
+              hideOverlay();               // close the “Continue Watching” dialog
+              requestRewardedAd();          // request the rewarded ad (no loading overlay)
             }else{
               showPauseCountdownOverlay(videoEl, i);
             }
           });
-          break; // stop checking further checkpoints until user decides
+          break; // stop checking further checkpoints until the user makes a choice
         }
       }
     };
 
-    // detach any previous listener
     if(videoEl._timeupdateListener){
       videoEl.removeEventListener('timeupdate', videoEl._timeupdateListener);
     }
@@ -472,7 +466,7 @@ window.onAdFailedToPreload = function(){
 
 window.onAdNotAvailable = function(){
   console.warn('onAdNotAvailable() — resuming video (no web fallback).');
-  hideOverlay();                     // remove any loading / countdown UI
+  hideOverlay();
   try{
     const active = document.querySelector('.queue-item.active');
     if(active){
@@ -483,7 +477,8 @@ window.onAdNotAvailable = function(){
       }
     }
   }catch(e){ console.error(e); }
-  // user was waiting for an ad – just clear the flag
+
+  // clear any pending‑ad state
   if(preAdPending){
     preAdPending = false;
     pendingPlayIndex = null;
@@ -492,12 +487,13 @@ window.onAdNotAvailable = function(){
 
 window.onAdCompleted = function(targetUrl){
   console.log('onAdCompleted() ->', targetUrl);
-  // brief reward toast
+
+  // ----- reward toast -----
   showOverlay('<p>Reward granted!</p>');
   setTimeout(()=>{
-    hideOverlay();
+    hideOverlay();                     // hide the toast after 1 s
 
-    // resume the video that was paused for the ad
+    // ----- resume the video that was paused for the ad -----
     try{
       const active = document.querySelector('.queue-item.active');
       if(active){
@@ -509,11 +505,11 @@ window.onAdCompleted = function(targetUrl){
       }
     }catch(e){ console.error(e); }
 
-    // clear pending‑ad state
+    // ----- clear pending‑ad flags -----
     preAdPending = false;
     pendingPlayIndex = null;
 
-    // open any target URL supplied by the ad
+    // ----- open any URL supplied by the ad (if applicable) -----
     if(targetUrl && targetUrl !== 'null' && targetUrl !== ''){
       try{
         if(hasAndroidBridge() && typeof Android.loadUrlInWebView === 'function'){
@@ -523,10 +519,10 @@ window.onAdCompleted = function(targetUrl){
         }else{
           window.location.href = targetUrl;
         }
-      }catch(e){ console.error('failed to open targetUrl',e);}
+      }catch(e){ console.error('failed to open targetUrl',e); }
     }
 
-    // request the native side to preload the next ad (defensive)
+    // ----- request the next ad to be pre‑loaded (defensive) -----
     try{
       if(hasAndroidBridge()){
         if(typeof Android.preloadRewardedAd === 'function'){
@@ -535,8 +531,8 @@ window.onAdCompleted = function(targetUrl){
           Android.preloadRewardedAd();
         }
       }
-    }catch(e){ console.warn('preload after ad failed',e);}
-  },1000);
+    }catch(e){ console.warn('preload after ad failed',e); }
+  },1000); // 1 second toast duration
 };
 
 /* --------------------------- INIT --------------------------- */
@@ -544,7 +540,7 @@ window.onAdCompleted = function(targetUrl){
   await sendStoredToBackend();
   await loadVideos();
 
-  // ask native to preload a rewarded ad for the first use (if bridge exists)
+  // ask native to preload an ad for the first time (if bridge exists)
   try{
     if(hasAndroidBridge()){
       if(typeof Android.preloadRewardedAd === 'function'){
@@ -554,7 +550,7 @@ window.onAdCompleted = function(targetUrl){
       }
       console.log('Requested native to preload rewarded ad (init).');
     }else{
-      console.log('Android bridge not detected on init (likely running in browser).');
+      console.log('Android bridge not detected on init (running in browser).');
     }
   }catch(e){
     console.warn('preload request failed',e);
