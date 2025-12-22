@@ -13,7 +13,7 @@
       --text:#e6eef8;
     }
     *{box-sizing:border-box;margin:0;padding:0}
-    body {
+    body{
       font-family:Inter,system-ui,Arial,sans-serif;
       background:linear-gradient(180deg,#071024 0%,#07172a 100%);
       color:var(--text);
@@ -104,17 +104,17 @@
       border-radius:10px;
       pointer-events:auto;
     }
-    video::-webkit-media-controls-enclosure { overflow:hidden; }
-    video::-webkit-media-controls-download-button { display:none !important; }
-    video::-internal-media-controls-download-button { display:none !important; }
-    video[controlslist] { controlslist: nodownload; }
+    video::-webkit-media-controls-enclosure{overflow:hidden}
+    video::-webkit-media-controls-download-button,
+    video::-internal-media-controls-download-button{display:none !important}
+    video[controlslist]{controlslist:nodownload}
     .search-results{margin-top:24px}
     .search-item{
       margin-top:16px;
       background:rgba(255,255,255,0.03);
       border-radius:10px;
       padding:14px;
-      transition:transform 0.2s;
+      transition:transform .2s;
     }
     .search-item:hover{transform:scale(1.01)}
     .thumb{
@@ -139,22 +139,17 @@
       .search{flex-direction:column}
       .search button{margin-left:0;margin-top:8px;width:100%}
     }
-    /* ---------- Modal for rewarded‑ad prompt ---------- */
-    .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:10000}
-    .modal.hidden{display:none}
-    .modal-content{
-      background:var(--card);
-      padding:20px;
-      border-radius:12px;
-      text-align:center;
-      max-width:320px;
-      width:90%;
-      color:var(--text);
-    }
   </style>
 </head>
+
 <body>
   <main class="app" role="main">
+
+    <!-- TOP NOTICE (highlighted) -->
+    <div class="notice" style="margin-bottom:12px;background:rgba(255,255,255,0.05);border:1px solid var(--accent);font-weight:600;">
+      All content belongs to its respective owners. Credits to original creators.
+    </div>
+
     <header>
       <div class="search">
         <input id="globalSearch" placeholder="Search by id, title or username" aria-label="Search" />
@@ -164,7 +159,9 @@
     </header>
 
     <section class="view">
-      <div class="notice" style="margin-top:14px">Click <strong>Upload</strong> to open uploader form. All fields are mandatory.</div>
+      <div class="notice" style="margin-top:14px">
+        Click <strong>Upload</strong> to open uploader form. All fields are mandatory.
+      </div>
 
       <!-- Upload Form -->
       <div id="uploadPage" class="page">
@@ -201,7 +198,7 @@
             </div>
           </div>
 
-          <div class="meta small">All fields required. We'll auto-generate MP4 link.</div>
+          <div class="meta small">All fields required. We'll auto‑generate MP4 link.</div>
 
           <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <button id="previewBtn" type="button" class="btn">Preview MP4</button>
@@ -220,466 +217,211 @@
     </section>
   </main>
 
-  <!-- ---------- Rewarded‑Ad Prompt Modal ---------- -->
-  <div id="adModal" class="modal hidden">
-    <div class="modal-content">
-      <p id="modalMessage">You have reached an ad point. Choose an option:</p>
-
-      <button id="watchAdBtn" class="btn primary">Watch Ad</button>
-
-      <div id="waitSection" style="margin-top:12px">
-        <button id="waitAdBtn" class="btn">Wait 45 seconds</button>
-      </div>
-
-      <div id="countdownSection" class="hidden" style="margin-top:12px">
-        <p class="small">Resuming in <span id="countdownNumber">45</span> seconds.</p>
-      </div>
-    </div>
-  </div>
-
   <script>
-  /* -------------------------------------------------------------------------
-   *  Constants & simple helpers
-   * ----------------------------------------------------------------------- */
-  const BACKEND_UPLOAD = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/upload';
-  const BACKEND_SEARCH = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/search';
-  const BACKEND_SEND_IDS = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/increment-ads';
-  const STORAGE_KEY = 'watched_videos';
+    /* -------------------- Constants -------------------- */
+    const BACKEND_UPLOAD = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/upload';
+    const BACKEND_SEARCH = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/search';
+    const STORAGE_KEY = 'watched_videos';
 
-  /* -------------------------------------------------------------------------
-   *  Global state for rewarded‑ad handling
-   * ----------------------------------------------------------------------- */
-  let currentAdVideo = null;                     // video that is paused for an ad
-  const AD_BASE_MILESTONES = [10, 120, 300, 600, 1200, 1800, 2400, 3000]; // up to 50 min
-  const AD_REPEAT_INTERVAL = 600;                // every 10 min after 50 min
-
-  // timer used while user waits 45 s
-  let adPromptTimer = null;
-
-  /* -------------------------------------------------------------------------
-   *  Utility functions
-   * ----------------------------------------------------------------------- */
-  function extractArchiveId(input) {
-    if (!input) return null;
-    const iframeMatch = input.match(/src\s*=\s*"([^"]+)"/i);
-    const url = iframeMatch ? iframeMatch[1] : input.trim();
-    const clean = url.split('?')[0];
-    const patterns = [
-      /archive\.org\/embed\/([^\/\?\s]+)/i,
-      /archive\.org\/details\/([^\/\?\s]+)/i,
-      /archive\.org\/download\/([^\/\?\s]+)/i
-    ];
-    for (const p of patterns) {
-      const m = clean.match(p);
-      if (m && m[1]) return decodeURIComponent(m[1]);
-    }
-    return null;
-  }
-
-  async function getMp4FromMetadata(id) {
-    const res = await fetch(`https://archive.org/metadata/${id}`);
-    if (!res.ok) throw new Error('Metadata not found');
-    const data = await res.json();
-    const file = data?.files?.find(f => f.name.toLowerCase().endsWith('.mp4'));
-    if (!file) throw new Error('No MP4 found');
-    return `https://archive.org/download/${id}/${encodeURIComponent(file.name)}`;
-  }
-
-  function getStoredVideoIds() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function storeVideoId(id) {
-    if (!id) return;
-    let ids = getStoredVideoIds();
-    if (!ids.includes(id)) {
-      ids.push(id);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
-      console.log('Stored unique video ID:', id);
-    } else {
-      console.log('Duplicate ignored:', id);
-    }
-  }
-
-  function clearStoredVideoIds() {
-    localStorage.removeItem(STORAGE_KEY);
-  }
-
-  /* -------------------------------------------------------------------------
-   *  Send stored IDs to backend (unchanged from original)
-   * ----------------------------------------------------------------------- */
-  let sendInProgress = false;
-  async function sendStoredVideoIds() {
-    if (sendInProgress) return;
-    const ids = [...new Set(getStoredVideoIds())];
-    if (ids.length === 0) return;
-    sendInProgress = true;
-    try {
-      const res = await fetch(BACKEND_SEND_IDS, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ video_ids: ids })
-      });
-      if (res.ok) clearStoredVideoIds();
-    } catch (err) {
-      console.error('Error sending IDs:', err);
-    } finally {
-      sendInProgress = false;
-    }
-  }
-
-  window.addEventListener('load', () => setTimeout(sendStoredVideoIds, 400));
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') setTimeout(sendStoredVideoIds, 250);
-  });
-
-  /* -------------------------------------------------------------------------
-   *  Rewarded‑ad native bridge callbacks (JS side)
-   * ----------------------------------------------------------------------- */
-  function onAdPreloaded() {
-    console.log('✅ Rewarded ad preloaded');
-  }
-  function onAdFailedToPreload() {
-    console.warn('⚠️ Rewarded ad failed to preload');
-  }
-  function onAdNotAvailable() {
-    console.warn('⚠️ Rewarded ad not available');
-    if (currentAdVideo) {
-      currentAdVideo.play();
-      currentAdVideo = null;
-    }
-  }
-  function onAdCompleted(url) {
-    console.log('✅ Rewarded ad completed', url);
-    if (currentAdVideo) {
-      currentAdVideo.play();
-      currentAdVideo = null;
-    }
-    if (window.Android && typeof Android.preloadRewardedAd === 'function') {
-      Android.preloadRewardedAd();
-    }
-  }
-  function setAndroidId(id) {
-    console.log('Received Android ID from native code:', id);
-  }
-
-  /* -------------------------------------------------------------------------
-   *  Helper to exit fullscreen (if any)
-   * ----------------------------------------------------------------------- */
-  function exitFullScreenIfNeeded(callback) {
-    if (document.fullscreenElement || document.webkitFullscreenElement) {
-      const exit = document.exitFullscreen?.() || document.webkitExitFullscreen?.();
-      Promise.resolve(exit).then(() => {
-        if (callback) callback();
-      });
-    } else {
-      if (callback) callback();
-    }
-  }
-
-  /* -------------------------------------------------------------------------
-   *  Modal handling – show prompt, wait, cancel, request ad
-   * ----------------------------------------------------------------------- */
-  function showAdPrompt(video) {
-    // Take the user out of fullscreen first (if needed)
-    exitFullScreenIfNeeded(() => {
-      // Pause the video and keep a reference for later
-      video.pause();
-      currentAdVideo = video;
-
-      // Populate modal with the video‑ID (used when requesting the ad)
-      const modal = document.getElementById('adModal');
-      modal.dataset.videoId = video.dataset.videoId || '';
-
-      // Reset UI to its initial state
-      document.getElementById('waitSection').classList.remove('hidden');
-      document.getElementById('countdownSection').classList.add('hidden');
-      document.getElementById('countdownNumber').textContent = '45';
-
-      // Show modal
-      modal.classList.remove('hidden');
-    });
-  }
-
-  /* ---- watch‑ad button (available at all times) ---- */
-  document.getElementById('watchAdBtn').addEventListener('click', () => {
-    const modal = document.getElementById('adModal');
-    const videoId = modal.dataset.videoId;
-
-    // Cancel any waiting timer
-    if (adPromptTimer) {
-      clearInterval(adPromptTimer);
-      adPromptTimer = null;
-    }
-
-    modal.classList.add('hidden');
-
-    // Request the rewarded ad via the Android bridge
-    if (window.Android && typeof Android.requestRewardedAd === 'function') {
-      Android.requestRewardedAd(videoId);
-    } else {
-      console.warn('Android bridge not available – cannot request rewarded ad');
-      // Fallback: simply resume playback
-      if (currentAdVideo) {
-        currentAdVideo.play();
-        currentAdVideo = null;
+    /* -------------------- Helper Functions -------------------- */
+    function extractArchiveId(input) {
+      if (!input) return null;
+      const iframeMatch = input.match(/src\s*=\s*"([^"]+)"/i);
+      const url = iframeMatch ? iframeMatch[1] : input.trim();
+      const clean = url.split('?')[0];
+      const patterns = [
+        /archive\.org\/embed\/([^\/\?\s]+)/i,
+        /archive\.org\/details\/([^\/\?\s]+)/i,
+        /archive\.org\/download\/([^\/\?\s]+)/i
+      ];
+      for (const p of patterns) {
+        const m = clean.match(p);
+        if (m && m[1]) return decodeURIComponent(m[1]);
       }
-    }
-  });
-
-  /* ---- wait‑45‑seconds button ---- */
-  document.getElementById('waitAdBtn').addEventListener('click', () => {
-    // Hide the wait button, show the countdown area
-    document.getElementById('waitSection').classList.add('hidden');
-    document.getElementById('countdownSection').classList.remove('hidden');
-
-    let remaining = 45;
-    const countdownEl = document.getElementById('countdownNumber');
-    countdownEl.textContent = remaining;
-
-    if (adPromptTimer) clearInterval(adPromptTimer);
-    adPromptTimer = setInterval(() => {
-      remaining--;
-      countdownEl.textContent = remaining;
-      if (remaining <= 0) {
-        clearInterval(adPromptTimer);
-        adPromptTimer = null;
-
-        // Hide modal and resume the video
-        document.getElementById('adModal').classList.add('hidden');
-        // Reset UI sections for potential next use
-        document.getElementById('waitSection').classList.remove('hidden');
-        document.getElementById('countdownSection').classList.add('hidden');
-
-        if (currentAdVideo) {
-          currentAdVideo.play();
-          currentAdVideo = null;
-        }
-      }
-    }, 1000);
-  });
-
-  /* -------------------------------------------------------------------------
-   *  Reward‑ad tracking per video (modified to use the prompt)
-   * ----------------------------------------------------------------------- */
-  function setupRewardedAdTracking(video) {
-    // Skip videos without a phone number (no ads)
-    const phoneNumber = video.dataset.phoneNumber;
-    if (!phoneNumber || phoneNumber === 'NULL' || phoneNumber === 'null') {
-      return;
+      return null;
     }
 
-    // Initialise per‑video ad state if not present
-    if (!video._adState) {
-      video._adState = {
-        milestones: AD_BASE_MILESTONES.slice(),
-        repeatInterval: AD_REPEAT_INTERVAL,
-        nextIdx: 0
-      };
-    }
-
-    const state = video._adState;
-
-    video.addEventListener('timeupdate', () => {
-      const current = Math.floor(video.currentTime);
-      let target;
-
-      if (state.nextIdx < state.milestones.length) {
-        target = state.milestones[state.nextIdx];
-      } else {
-        const extraSteps = state.nextIdx - state.milestones.length + 1;
-        target = state.milestones[state.milestones.length - 1] + extraSteps * state.repeatInterval;
-      }
-
-      if (current >= target) {
-        // Move on to the next milestone so we don’t fire again for this point
-        state.nextIdx++;
-
-        // Instead of playing the ad instantly, show the user prompt
-        showAdPrompt(video);
-      }
-    });
-  }
-
-  /* -------------------------------------------------------------------------
-   *  UI interactions (upload, preview, etc.)
-   * ----------------------------------------------------------------------- */
-  document.getElementById('openUpload').addEventListener('click', () => {
-    document.getElementById('uploadPage').classList.toggle('active');
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-  });
-
-  document.getElementById('previewBtn').addEventListener('click', async () => {
-    const id = extractArchiveId(document.getElementById('archiveVideo').value);
-    const formStatus = document.getElementById('formStatus');
-    if (!id) return formStatus.innerHTML = '<span class="error">Invalid Archive.org link</span>';
-    try {
-      const mp4 = await getMp4FromMetadata(id);
-      document.getElementById('previewVideo').src = mp4;
-      document.getElementById('previewArea').style.display = 'block';
-      formStatus.textContent = 'Preview ready ✔️';
-    } catch (err) {
-      formStatus.innerHTML = `<span class="error">${err.message}</span>`;
-    }
-  });
-
-  // Upload handler (unchanged apart from a tiny refactor)
-  document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formStatus = document.getElementById('formStatus');
-    const archiveVideo = document.getElementById('archiveVideo').value.trim();
-    const archiveImage = document.getElementById('archiveImage').value.trim();
-    const title = document.getElementById('title').value.trim();
-    const link1 = document.getElementById('link1').value.trim();
-    const link2 = document.getElementById('link2').value.trim();
-    const username = document.getElementById('username').value.trim();
-    const phone = document.getElementById('phone').value.trim();
-
-    if (![archiveVideo, archiveImage, title, link1, link2, username, phone].every(Boolean))
-      return formStatus.innerHTML = '<span class="error">All fields required.</span>';
-
-    if (!/^https?:\/\/(www\.)?archive\.org\//i.test(archiveImage)) {
-      return formStatus.innerHTML = '<span class="error">Image link must be from archive.org</span>';
-    }
-
-    const id = extractArchiveId(archiveVideo);
-    if (!id) return formStatus.innerHTML = '<span class="error">Invalid archive link.</span>';
-
-    try {
-      formStatus.textContent = 'Fetching MP4...';
-      const mp4_link = await getMp4FromMetadata(id);
-      const payload = {
-        mp4_link,
-        archive_org_iframe_image_link: archiveImage,
-        title,
-        link_1: link1,
-        link_2: link2,
-        username,
-        phone_number: phone
-      };
-      const res = await fetch(BACKEND_UPLOAD, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) formStatus.innerHTML = '<strong>✅ Uploaded successfully!</strong>';
-      else formStatus.innerHTML = `<span class="error">Upload failed: ${res.status}</span>`;
-    } catch (err) {
-      formStatus.innerHTML = `<span class="error">${err.message}</span>`;
-    }
-  });
-
-  /* -------------------------------------------------------------------------
-   *  Search & video rendering
-   * ----------------------------------------------------------------------- */
-  document.getElementById('searchBtn').addEventListener('click', async () => {
-    const q = document.getElementById('globalSearch').value.trim();
-    const searchResults = document.getElementById('searchResults');
-    if (!q) return alert('Type id/title/username to search.');
-    searchResults.innerHTML = '<div class="small">Searching...</div>';
-
-    try {
-      const res = await fetch(BACKEND_SEARCH + '?search=' + encodeURIComponent(q));
-      if (!res.ok) throw new Error('Search failed');
+    async function getMp4FromMetadata(id) {
+      const res = await fetch(`https://archive.org/metadata/${id}`);
+      if (!res.ok) throw new Error('Metadata not found');
       const data = await res.json();
-      const videos = Array.isArray(data) ? data : (data.id ? [data] : []);
-      if (videos.length === 0) {
-        searchResults.innerHTML = '<div class="small">No results found.</div>';
-        return;
+      const file = data?.files?.find(f => f.name.toLowerCase().endsWith('.mp4'));
+      if (!file) throw new Error('No MP4 found');
+      return `https://archive.org/download/${id}/${encodeURIComponent(file.name)}`;
+    }
+
+    function storeVideoId(id) {
+      if (!id) return;
+      let ids = [];
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        ids = raw ? JSON.parse(raw) : [];
+      } catch {}
+      if (!ids.includes(id)) {
+        ids.push(id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+        console.log('Stored video ID:', id);
+      }
+    }
+
+    /* -------------------- UI Interactions -------------------- */
+    // Open/close upload form
+    document.getElementById('openUpload').addEventListener('click', () => {
+      document.getElementById('uploadPage').classList.toggle('active');
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    });
+
+    // Preview MP4 button
+    document.getElementById('previewBtn').addEventListener('click', async () => {
+      const id = extractArchiveId(document.getElementById('archiveVideo').value);
+      const status = document.getElementById('formStatus');
+      if (!id) return status.innerHTML = '<span class="error">Invalid Archive.org link</span>';
+      try {
+        const mp4 = await getMp4FromMetadata(id);
+        document.getElementById('previewVideo').src = mp4;
+        document.getElementById('previewArea').style.display = 'block';
+        status.textContent = 'Preview ready ✔️';
+      } catch (err) {
+        status.innerHTML = `<span class="error">${err.message}</span>`;
+      }
+    });
+
+    // Upload form submission
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const status = document.getElementById('formStatus');
+
+      const archiveVideo = document.getElementById('archiveVideo').value.trim();
+      const archiveImage = document.getElementById('archiveImage').value.trim();
+      const title = document.getElementById('title').value.trim();
+      const link1 = document.getElementById('link1').value.trim();
+      const link2 = document.getElementById('link2').value.trim();
+      const username = document.getElementById('username').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+
+      if (![archiveVideo, archiveImage, title, link1, link2, username, phone].every(Boolean)) {
+        return status.innerHTML = '<span class="error">All fields required.</span>';
       }
 
-      // Render each video entry
-      searchResults.innerHTML = videos.map(v => `
-        <div class="search-item">
-          <div class="thumb" id="thumb-${v.id}">
-            <img src="${v.archive_org_iframe_image_link}" alt="Thumbnail" />
-          </div>
-          <div class="video" id="video-${v.id}" style="display:none;margin-top:12px">
-            <video
-              src="${v.mp4_link}"
-              controls
-              playsinline
-              controlslist="nodownload"
-              data-video-id="${v.id}"
-              data-phone-number="${v.phone_number ? v.phone_number : ''}"
-            ></video>
-          </div>
-          <div class="details">
-            <strong>ID:</strong> ${v.id}<br>
-            <strong>Title:</strong> ${v.title}<br>
-            <strong>Link 1:</strong> <a href="${v.link_1}" target="_blank">${v.link_1}</a><br>
-            <strong>Link 2:</strong> <a href="${v.link_2}" target="_blank">${v.link_2}</a><br>
-            <strong>Username:</strong> ${v.username}
-          </div>
-        </div>
-      `).join('');
+      if (!/^https?:\/\/(www\.)?archive\.org\//i.test(archiveImage)) {
+        return status.innerHTML = '<span class="error">Image link must be from archive.org</span>';
+      }
 
-      // Attach behaviours for each video card
-      videos.forEach(v => {
-        const thumb   = document.getElementById(`thumb-${v.id}`);
-        const videoEl = document.getElementById(`video-${v.id}`);
-        const video   = videoEl.querySelector('video');
+      const id = extractArchiveId(archiveVideo);
+      if (!id) return status.innerHTML = '<span class="error">Invalid archive link.</span>';
 
-        // Show video when thumbnail is clicked
-        thumb.addEventListener('click', () => {
-          document.querySelectorAll('.search-item .video').forEach(c => c.style.display = 'none');
-          document.querySelectorAll('.search-item .thumb').forEach(t => t.style.display = 'block');
-          thumb.style.display = 'none';
-          videoEl.style.display = 'block';
+      try {
+        status.textContent = 'Fetching MP4...';
+        const mp4_link = await getMp4FromMetadata(id);
+        const payload = {
+          mp4_link,
+          archive_org_iframe_image_link: archiveImage,
+          title,
+          link_1: link1,
+          link_2: link2,
+          username,
+          phone_number: phone
+        };
+        const res = await fetch(BACKEND_UPLOAD, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
         });
+        if (res.ok) status.innerHTML = '<strong>✅ Uploaded successfully!</strong>';
+        else status.innerHTML = `<span class="error">Upload failed: ${res.status}</span>`;
+      } catch (err) {
+        status.innerHTML = `<span class="error">${err.message}</span>`;
+      }
+    });
 
-        // Pause other videos when a new one starts
-        video.addEventListener('play', () => {
-          document.querySelectorAll('video').forEach(vid => {
-            if (vid !== video) {
-              try { vid.pause(); vid.currentTime = 0; } catch(e){}
-              const container = vid.closest('.video');
-              if (container) container.style.display = 'none';
-              const thumbDiv = container ? container.previousElementSibling : null;
-              if (thumbDiv) thumbDiv.style.display = 'block';
-            }
+    // Search button handling
+    document.getElementById('searchBtn').addEventListener('click', async () => {
+      const q = document.getElementById('globalSearch').value.trim();
+      const resultsDiv = document.getElementById('searchResults');
+      if (!q) return alert('Type id/title/username to search.');
+      resultsDiv.innerHTML = '<div class="small">Searching...</div>';
+
+      try {
+        const res = await fetch(`${BACKEND_SEARCH}?search=${encodeURIComponent(q)}`);
+        if (!res.ok) throw new Error('Search failed');
+        const data = await res.json();
+        const videos = Array.isArray(data) ? data : (data.id ? [data] : []);
+
+        if (videos.length === 0) {
+          resultsDiv.innerHTML = '<div class="small">No results found.</div>';
+          return;
+        }
+
+        resultsDiv.innerHTML = videos.map(v => `
+          <div class="search-item">
+            <div class="thumb" id="thumb-${v.id}">
+              <img src="${v.archive_org_iframe_image_link}" alt="Thumbnail" />
+            </div>
+            <div class="video" id="video-${v.id}" style="display:none;margin-top:12px">
+              <video
+                src="${v.mp4_link}"
+                controls
+                playsinline
+                controlslist="nodownload"
+                data-video-id="${v.id}"
+                data-phone-number="${v.phone_number ? v.phone_number : ''}"
+              ></video>
+            </div>
+            <div class="details">
+              <strong>ID:</strong> ${v.id}<br>
+              <strong>Title:</strong> ${v.title}<br>
+              <strong>Link 1:</strong> <a href="${v.link_1}" target="_blank">${v.link_1}</a><br>
+              <strong>Link 2:</strong> <a href="${v.link_2}" target="_blank">${v.link_2}</a><br>
+              <strong>Username:</strong> ${v.username}
+            </div>
+          </div>
+        `).join('');
+
+        // Attach interactions for each result
+        videos.forEach(v => {
+          const thumb   = document.getElementById(`thumb-${v.id}`);
+          const videoCt = document.getElementById(`video-${v.id}`);
+          const video   = videoCt.querySelector('video');
+
+          // Show video on thumbnail click
+          thumb.addEventListener('click', () => {
+            document.querySelectorAll('.search-item .video')
+                    .forEach(c => c.style.display = 'none');
+            document.querySelectorAll('.search-item .thumb')
+                    .forEach(t => t.style.display = 'block');
+            thumb.style.display = 'none';
+            videoCt.style.display = 'block';
           });
+
+          // Pause other videos when this one starts playing
+          video.addEventListener('play', () => {
+            document.querySelectorAll('video').forEach(vid => {
+              if (vid !== video) {
+                try { vid.pause(); vid.currentTime = 0; } catch(e) {}
+                const parentVideo = vid.closest('.video');
+                if (parentVideo) parentVideo.style.display = 'none';
+                const siblingThumb = parentVideo ? parentVideo.previousElementSibling : null;
+                if (siblingThumb) siblingThumb.style.display = 'block';
+              }
+            });
+          });
+
+          // Store video ID for analytics when playback starts
+          video.addEventListener('playing', () => storeVideoId(v.id));
         });
 
-        // Store video ID for analytics (unchanged)
-        video.addEventListener('playing', () => storeVideoId(v.id));
+      } catch (err) {
+        resultsDiv.innerHTML = `<div class="error">${err.message}</div>`;
+      }
+    });
 
-        // Initialise rewarded‑ad tracking for this video
-        setupRewardedAdTracking(video);
-      });
-    } catch (err) {
-      searchResults.innerHTML = `<div class="error">${err.message}</div>`;
-    }
-  });
-
-  /* -------------------------------------------------------------------------
-   *  Global play listener – keep the original ID‑storing behaviour
-   * ----------------------------------------------------------------------- */
-  document.addEventListener('play', e => {
-    if (e.target && e.target.tagName === 'VIDEO') {
-      const vid = e.target.getAttribute('data-video-id') || e.target.src || null;
-      if (vid) storeVideoId(vid);
-    }
-  }, true);
-
-  /* -------------------------------------------------------------------------
-   *  Initial native bridge actions (pre‑load ad, ask for Android ID)
-   * ----------------------------------------------------------------------- */
-  window.addEventListener('load', () => {
-    // Pre‑load a rewarded ad for the first time
-    if (window.Android && typeof Android.preloadRewardedAd === 'function') {
-      Android.preloadRewardedAd();
-    }
-    // (Optional) ask the native side for the device ID
-    if (window.Android && typeof Android.getAndroidId === 'function') {
-      Android.getAndroidId();
-    }
-  });
+    // Global listener – store video ID for any video element that plays
+    document.addEventListener('play', e => {
+      if (e.target && e.target.tagName === 'VIDEO') {
+        const vid = e.target.getAttribute('data-video-id') || e.target.src || null;
+        if (vid) storeVideoId(vid);
+      }
+    }, true);
   </script>
 </body>
 </html>
