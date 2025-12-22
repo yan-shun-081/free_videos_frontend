@@ -25,6 +25,19 @@ body{
   overflow-x:hidden;
 }
 
+/* ----- top notice ----- */
+.notice{
+  background:rgba(255,255,255,0.08);
+  border:1px solid var(--accent);
+  color:var(--soft);
+  text-align:center;
+  padding:8px;
+  margin-bottom:12px;
+  border-radius:8px;
+  font-size:14px;
+  font-weight:600;
+}
+
 /* Queue */
 .queue{
   display:flex;
@@ -93,55 +106,33 @@ body{
   font-size:14px;
 }
 
-/* ---------- Modal (ad prompt) ---------- */
-.modal{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,0.6);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:9999;
+/* Mobile */
+@media (max-width:640px){
+  h1{font-size:1.8rem}
+  h2{font-size:1.25rem}
+  iframe{height:350px !important}
+  .train-container{height:22px}
+  .car{width:50px;height:12px}
 }
-.modal.hidden{display:none}
-.modal-content{
-  background:var(--card);
-  padding:20px;
-  border-radius:10px;
-  max-width:300px;
-  width:90%;
-  text-align:center;
-  color:var(--soft);
-}
-.modal-content .btn{
-  width:100%;
-  margin:8px 0;
-}
-#countdownContainer{margin-top:12px}
 </style>
 </head>
 
 <body>
 
+<!-- ----- highlighted notice ----- -->
+<div class="notice">
+  All content belongs to its respective owners. Credits to original creators.
+</div>
+
+<!-- Queue container -->
 <div class="queue" id="queueList">
   <div class="loader" id="loader">Loading videos...</div>
 </div>
 
+<!-- Controls -->
 <div class="controls">
   <button class="btn" id="prevBtn">Prev</button>
   <button class="btn" id="nextBtn">Next</button>
-</div>
-
-<!-- ---------- Reward‑ad Prompt Modal ---------- -->
-<div id="adModal" class="modal hidden">
-  <div class="modal-content">
-    <p>Ad point reached. Choose an option.</p>
-    <button id="modalWatchBtn" class="btn primary">Watch Ad</button>
-    <button id="modalWaitBtn" class="btn">Wait 45 seconds</button>
-    <div id="countdownContainer" class="hidden">
-      <p class="small">Resuming in <span id="countdownNumber">45</span> seconds.</p>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -150,7 +141,6 @@ body{
  * ----------------------------------------------------------------------- */
 const BACKEND = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
 const STORAGE_KEY = 'clicked_ids';
-const AD_CHECKPOINTS = [10,120,300,600,1200,1800,2400,3000,3600,4200,4800,5400,6000,6600,7200];
 
 /* -------------------------------------------------------------------------
  *  LocalStorage helpers
@@ -241,197 +231,14 @@ function renderNextBatch(){
  *  Infinite scroll – load more when near bottom
  * ----------------------------------------------------------------------- */
 queueList.addEventListener('scroll',()=>{
-  const nearBottom = queueList.scrollTop + queueList.clientHeight >= queueList.scrollHeight-150;
+  const nearBottom = queueList.scrollTop + queueList.clientHeight >= queueList.scrollHeight - 150;
   if(nearBottom && displayedCount < videos.length) renderNextBatch();
 });
 
 /* -------------------------------------------------------------------------
- *  Android bridge helpers
- * ----------------------------------------------------------------------- */
-function hasAndroidBridge(){
-  return (typeof Android !== 'undefined' && Android !== null);
-}
-
-/* -------------------------------------------------------------------------
- *  Decide if a video should have ads (based on phone_number)
- * ----------------------------------------------------------------------- */
-function shouldShowAds(videoData){
-  const pn = videoData.phone_number;
-  return pn && pn!=='NULL' && pn!=='null';
-}
-
-/* -------------------------------------------------------------------------
- *  Reward‑ad callbacks (called from native side)
- * ----------------------------------------------------------------------- */
-window.onAdPreloaded = function(){ console.log('✅ onAdPreloaded'); };
-window.onAdFailedToPreload = function(){ console.warn('⚠️ onAdFailedToPreload'); };
-window.onAdNotAvailable = function(){
-  console.warn('⚠️ onAdNotAvailable – resuming video (no ad).');
-  if(pendingAdVideo && pendingAdVideo._wasPausedForAd){
-    pendingAdVideo._wasPausedForAd = false;
-    pendingAdVideo.play().catch(()=>{});
-  }
-  pendingAdVideo = null;
-  hideAdModal();
-};
-window.onAdCompleted = function(targetUrl){
-  console.log('✅ onAdCompleted →',targetUrl);
-  if(pendingAdVideo && pendingAdVideo._wasPausedForAd){
-    pendingAdVideo._wasPausedForAd = false;
-    pendingAdVideo.play().catch(()=>{});
-  }
-  pendingAdVideo = null;
-  hideAdModal();
-
-  // preload the next ad
-  try{
-    if(hasAndroidBridge() && typeof Android.preloadRewardedAd === 'function')
-      Android.preloadRewardedAd();
-  }catch(e){ console.warn('preload after completion failed',e); }
-
-  // open any URL the native side wants us to show
-  if(targetUrl && targetUrl!=='null' && targetUrl!==''){
-    try{
-      if(hasAndroidBridge() && typeof Android.loadUrlInWebView === 'function')
-        Android.loadUrlInWebView(targetUrl);
-      else window.location.href = targetUrl;
-    }catch(e){ console.error('failed to open targetUrl',e); }
-  }
-};
-
-/* -------------------------------------------------------------------------
- *  Variables for ad‑prompt handling
- * ----------------------------------------------------------------------- */
-let pendingAdVideo = null;           // video that is paused because of an ad point
-let adCountdownTimer = null;        // interval id for the 45‑sec wait
-let adCountdownRemaining = 45;
-
-/* -------------------------------------------------------------------------
- *  Helper: exit fullscreen (if any) before showing modal
- * ----------------------------------------------------------------------- */
-function exitFullScreenIfNeeded(cb){
-  if(document.fullscreenElement || document.webkitFullscreenElement){
-    const exit = document.exitFullscreen?.() || document.webkitExitFullscreen?.();
-    Promise.resolve(exit).then(()=>cb && cb()).catch(()=>cb && cb());
-  }else{
-    cb && cb();
-  }
-}
-
-/* -------------------------------------------------------------------------
- *  Modal UI helpers
- * ----------------------------------------------------------------------- */
-function hideAdModal(){
-  const modal = document.getElementById('adModal');
-  if(modal) modal.classList.add('hidden');
-
-  const cnt = document.getElementById('countdownContainer');
-  const wait = document.getElementById('modalWaitBtn');
-  if(cnt) cnt.classList.add('hidden');
-  if(wait) wait.classList.remove('hidden');
-
-  if(adCountdownTimer){
-    clearInterval(adCountdownTimer);
-    adCountdownTimer = null;
-  }
-}
-
-function resumePendingVideo(){
-  if(pendingAdVideo && pendingAdVideo._wasPausedForAd){
-    pendingAdVideo._wasPausedForAd = false;
-    pendingAdVideo.play().catch(()=>{});
-  }
-  pendingAdVideo = null;
-}
-
-/* Show the ad prompt – pause video, exit fullscreen, then open modal */
-function showAdPrompt(video){
-  if(!video) return;
-  pendingAdVideo = video;
-  video.pause();
-  video._wasPausedForAd = true;
-
-  // reset modal UI
-  const waitBtn = document.getElementById('modalWaitBtn');
-  const cnt = document.getElementById('countdownContainer');
-  const cntNum = document.getElementById('countdownNumber');
-  if(waitBtn) waitBtn.classList.remove('hidden');
-  if(cnt) cnt.classList.add('hidden');
-  if(cntNum) cntNum.textContent = '45';
-  if(adCountdownTimer){
-    clearInterval(adCountdownTimer);
-    adCountdownTimer = null;
-  }
-
-  // Ensure we are not in fullscreen before showing overlay
-  exitFullScreenIfNeeded(()=>{
-    const modal = document.getElementById('adModal');
-    if(modal) modal.classList.remove('hidden');
-  });
-}
-
-/* -------------------------------------------------------------------------
- *  Modal button handlers
- * ----------------------------------------------------------------------- */
-document.getElementById('modalWatchBtn').addEventListener('click',()=>{
-  // user decided to watch the ad
-  if(adCountdownTimer){
-    clearInterval(adCountdownTimer);
-    adCountdownTimer = null;
-  }
-  hideAdModal(); // hide UI while native ad is shown
-
-  if(pendingAdVideo){
-    const src = pendingAdVideo.currentSrc || pendingAdVideo.src || '';
-    try{
-      if(hasAndroidBridge() && typeof Android.requestRewardedAd === 'function'){
-        Android.requestRewardedAd(src);
-        console.log('Requested rewarded ad from native');
-      }else{
-        console.warn('Android bridge not available – resuming video');
-        resumePendingVideo();
-      }
-    }catch(e){
-      console.error('Error requesting rewarded ad',e);
-      resumePendingVideo();
-    }
-  }
-});
-
-document.getElementById('modalWaitBtn').addEventListener('click',()=>{
-  // start a 45‑second countdown
-  const waitBtn = document.getElementById('modalWaitBtn');
-  const cnt = document.getElementById('countdownContainer');
-  const cntNum = document.getElementById('countdownNumber');
-
-  if(waitBtn) waitBtn.classList.add('hidden');
-  if(cnt) cnt.classList.remove('hidden');
-
-  adCountdownRemaining = 45;
-  cntNum.textContent = adCountdownRemaining;
-
-  if(adCountdownTimer) clearInterval(adCountdownTimer);
-  adCountdownTimer = setInterval(()=>{
-    adCountdownRemaining--;
-    if(adCountdownRemaining<=0){
-      clearInterval(adCountdownTimer);
-      adCountdownTimer = null;
-      resumePendingVideo();
-      hideAdModal();
-    }else{
-      cntNum.textContent = adCountdownRemaining;
-    }
-  },1000);
-});
-
-/* -------------------------------------------------------------------------
- *  Play an inline video (adds ad‑checkpoint handling)
+ *  Play an inline video (no ad checkpoint logic)
  * ----------------------------------------------------------------------- */
 function playInline(idx){
-  // clean up any open ad UI before switching video
-  hideAdModal();
-  pendingAdVideo = null;
-
   currentIndex = idx;
   const v = videos[idx];
   const items = document.querySelectorAll('.queue-item');
@@ -452,44 +259,11 @@ function playInline(idx){
     }
   });
 
-  // scroll the selected card into view
+  // scroll newly‑active item into view
   items[idx]?.scrollIntoView({behavior:'smooth',block:'center'});
 
-  // store click for analytics
+  // store the click for analytics
   if(v.id!=null) store(Number(v.id));
-
-  // ad‑checkpoint handling – attached after the video element exists
-  requestAnimationFrame(()=>{
-    const active = document.querySelector('.queue-item.active');
-    if(!active) return;
-    const video = active.querySelector('video');
-    if(!video) return;
-
-    // one‑time Set to remember which checkpoints already fired
-    video._triggeredCheckpoints = new Set();
-    video._wasPausedForAd = false;
-
-    const adsEnabled = shouldShowAds(v);
-
-    function onTimeUpdate(){
-      if(!adsEnabled) return;
-      for(const cp of AD_CHECKPOINTS){
-        if(video.currentTime >= cp && !video._triggeredCheckpoints.has(cp)){
-          video._triggeredCheckpoints.add(cp);
-          // show our custom prompt instead of auto‑playing the ad
-          showAdPrompt(video);
-          break; // only one checkpoint per tick
-        }
-      }
-    }
-
-    // clean possible previous listeners
-    if(video._adTimeHandler){
-      video.removeEventListener('timeupdate',video._adTimeHandler);
-    }
-    video._adTimeHandler = onTimeUpdate;
-    video.addEventListener('timeupdate',video._adTimeHandler);
-  });
 }
 
 /* -------------------------------------------------------------------------
@@ -511,21 +285,8 @@ window.addEventListener('load', async ()=>{
 
   // load the video list
   await loadVideos();
-
-  // ask native side to preload the first rewarded ad
-  try{
-    if(hasAndroidBridge()){
-      if(typeof Android.preloadRewardedAd === 'function')
-        Android.preloadRewardedAd();
-      else if(Android.preloadRewardedAd) Android.preloadRewardedAd();
-      console.log('Requested native to preload rewarded ad (init)');
-    }else{
-      console.log('Android bridge not detected – running in browser');
-    }
-  }catch(e){
-    console.warn('preload request failed',e);
-  }
 });
 </script>
+
 </body>
 </html>
