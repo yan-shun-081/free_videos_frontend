@@ -162,6 +162,21 @@
     }
     .fullscreen-btn:active { transform: scale(.9); }
 
+    /* --------- ARROW DECORATIONS FOR FULLSCREEN BUTTON ---------- */
+    .arrow-left,
+    .arrow-right{
+      font-weight:600;
+      font-size:1.2rem;
+    }
+    .arrow-left{
+      color:#00ff00;                               /* bright neon green  */
+      text-shadow:0 0 6px #00ff00;
+    }
+    .arrow-right{
+      color:#ffd700;                               /* bright gold yellow   */
+      text-shadow:0 0 6px #ffd700;
+    }
+
     /* --------- FLOATING FEEDBACK BUTTON ---------- */
     .feedback-btn {
       position: fixed;
@@ -219,10 +234,12 @@
   <section id="metadata" class="w-full max-w-5xl glass p-6 fade-in">
     <h2 class="text-2xl font-semibold text-blue-300 mb-4">🔍 Search & Upload Here</h2>
 
-    <!-- FULLSCREEN BUTTON -->
-    <div class="flex justify-end mb-2">
+    <!-- FULLSCREEN BUTTON + arrows -->
+    <div class="flex justify-end mb-2 items-center gap-1">
+      <span class="arrow-left">--&gt;</span>
       <button onclick="openFullscreen('metaFrame')" class="fullscreen-btn"
               aria-label="Fullscreen search & upload">⛶</button>
+      <span class="arrow-right">&lt;--</span>
     </div>
 
     <iframe id="metaFrame" src="free_videos_metadata_frontend.html"
@@ -243,10 +260,12 @@
       </div>
     </div>
 
-    <!-- FULLSCREEN BUTTON -->
-    <div class="flex justify-end mb-2">
+    <!-- FULLSCREEN BUTTON + arrows -->
+    <div class="flex justify-end mb-2 items-center gap-1">
+      <span class="arrow-left">--&gt;</span>
       <button onclick="openFullscreen('videoFrame')" class="fullscreen-btn"
               aria-label="Fullscreen video display">⛶</button>
+      <span class="arrow-right">&lt;--</span>
     </div>
 
     <!-- Embedded Video Display -->
