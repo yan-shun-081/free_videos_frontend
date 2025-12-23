@@ -314,9 +314,9 @@ document.getElementById('nextBtn').onclick = ()=>{
  * Build the plain‑text version used for the WhatsApp fallback.
  */
 function buildShareText(video){
-  const title = video.title || 'Untitled video';
-  const vidId = video.id ?? '-';
-  const user  = video.username || '-';
+  const title   = video.title   || 'Untitled video';
+  const vidId   = video.id ?? '-';
+  const user    = video.username || '-';
   return `Page name: ${PAGE_NAME}
 Page ID: ${PAGE_ID}
 Video title: ${title}
@@ -360,11 +360,11 @@ async function createCompositeImage(video){
     `Developer: YAN`
   ];
 
-  const padding     = 20;   // padding around the text block
-  const lineHeight  = 28;   // vertical spacing per line
-  const textHeight  = lines.length * lineHeight + padding;
-  const canvasW     = Math.round(thumbW);
-  const canvasH     = Math.round(thumbH + textHeight);
+  const padding    = 20;   // padding around the text block
+  const lineHeight = 28;   // vertical spacing per line
+  const textHeight = lines.length * lineHeight + padding;
+  const canvasW    = Math.round(thumbW);
+  const canvasH    = Math.round(thumbH + textHeight);
 
   // ----- draw onto canvas -----
   const canvas = document.createElement('canvas');
@@ -381,7 +381,7 @@ async function createCompositeImage(video){
 
   // text under the thumbnail
   ctx.fillStyle = '#333333';               // dark‑gray for good contrast
-  ctx.font = '20px Arial';                 // medium‑size font
+  ctx.font = '20px Arial';
   ctx.textBaseline = 'top';
   const startY = thumbH + padding/2;
   lines.forEach((txt, idx) => {
@@ -399,45 +399,58 @@ async function createCompositeImage(video){
 
 /**
  * Share routine:
- *   1️⃣ Build the composite image.
- *   2️⃣ Try to share it via the native Web‑Share API (mobile browsers).
- *   3️⃣ If the API isn’t available or fails, fall back to a WhatsApp text link.
+ *   1️⃣ Try native Web‑Share API.
+ *   2️⃣ If that isn’t available (e.g. Android WebView), call the Android bridge.
+ *   3️⃣ If neither works, fall back to a WhatsApp text link.
  */
 async function shareThumbnail(idx){
   const video = videos[idx];
   if(!video) return;
 
-  // ---------- 1️⃣ create composite image ----------
-  let compositeBlob;
+  /* --------------------------------------------------------------
+   *  1️⃣ Try the native Web‑Share API (works on browsers)
+   * -------------------------------------------------------------- */
   try{
-    compositeBlob = await createCompositeImage(video);
-  }catch(err){
-    console.warn('Could not create composite image (CORS issue?), falling back to text link.', err);
-    const waLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(buildShareText(video))}`;
-    window.open(waLink,'_blank');
-    return;
-  }
-
-  const file = new File([compositeBlob], 'video-share.jpg', {type: compositeBlob.type});
-
-  // ---------- 2️⃣ attempt native share ----------
-  try{
-    if (navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({
-        files: [file],
-        title: video.title || ''
-        // No separate text – all data is already inside the image.
-      });
-      console.log('✅ Shared composite image via Web Share API');
-      return; // success – stop here
+    if (navigator.canShare && navigator.canShare({files: []})){
+      const blob = await createCompositeImage(video);
+      const file = new File([blob], 'video-share.jpg', {type: blob.type});
+      if (navigator.share && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title: video.title || ''});
+        console.log('✅ shared via standard Web‑Share');
+        return;               // success – stop here
+      }
     }
   }catch(e){
-    console.warn('Native share failed – will use WhatsApp fallback', e);
+    console.warn('Web‑Share API not usable (expected in WebView)', e);
   }
 
-  // ---------- 3️⃣ WhatsApp fallback (text only) ----------
-  const waLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(buildShareText(video))}`;
-  window.open(waLink,'_blank');
+  /* --------------------------------------------------------------
+   *  2️⃣ Android bridge – the only way to attach an image inside a WebView
+   * -------------------------------------------------------------- */
+  if (window.Android && typeof window.Android.shareImage === 'function'){
+    try{
+      const blob = await createCompositeImage(video);
+      const dataUrl = await new Promise((res,rej)=>{
+        const fr = new FileReader();
+        fr.onload  = () => res(fr.result);   // e.g. "data:image/jpeg;base64,…"
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+      const fileName = `video_${video.id ?? Date.now()}.jpg`;
+      const text     = buildShareText(video);
+      window.Android.shareImage(dataUrl, fileName, video.title||'Video', text);
+      console.log('✅ delegated share to Android bridge');
+      return;               // success – stop here
+    }catch(e){
+      console.error('Bridge share failed → fallback', e);
+    }
+  }
+
+  /* --------------------------------------------------------------
+   *  3️⃣ Final fallback – WhatsApp text‑only link
+   * -------------------------------------------------------------- */
+  const wa = `https://api.whatsapp.com/send?text=${encodeURIComponent(buildShareText(video))}`;
+  window.open(wa, '_blank');
 }
 
 /* Delegated click listener – catches clicks on any .share‑btn inside the queue */
