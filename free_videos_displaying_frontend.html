@@ -1,437 +1,482 @@
-<!DOCTYPE html>
+
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport"
-      content="width=device-width,initial-scale=1.0,maximum-scale=5,user-scalable=yes" />
-<title>📚 Image Stream</title>
-
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap"
-      rel="stylesheet">
-
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Inline Video Queue</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{
-    font-family:'Poppins',sans-serif;
-    background:linear-gradient(135deg,#0f172a,#1e293b);
-    color:#fff;
-    min-height:100vh;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    padding-bottom:60px;
-  }
-  header{
-    width:100%;padding:16px;text-align:center;
-    background:rgba(255,255,255,0.08);backdrop-filter:blur(12px);
-    box-shadow:0 4px 20px rgba(0,0,0,.3);
-    font-size:1.5em;font-weight:600;color:#60a5fa;letter-spacing:1px;
-  }
-  #feed{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
-    gap:16px;width:92%;max-width:1300px;margin-top:24px;
-  }
-  .card{
-    background:rgba(255,255,255,0.08);border-radius:16px;padding:14px;
-    display:flex;flex-direction:column;
-    transition:transform .25s ease,box-shadow .25s ease;
-  }
-  .card:hover{
-    transform:translateY(-4px);
-    box-shadow:0 8px 20px rgba(0,0,0,.4);
-  }
-  .preview{
-    width:100%;aspect-ratio:16/9;border-radius:12px;
-    overflow:hidden;background:#1e293b;
-    display:flex;align-items:center;justify-content:center;
-  }
-  .preview img{width:100%;height:100%;object-fit:cover;}
-  .preview-wrapper{position:relative;width:100%;}
-  .ellipsis-overlay{
-    position:absolute;top:4px;left:4px;
-    color:#ff4500;font-size:1.8em;font-weight:bold;
-    pointer-events:none;
-  }
-  .info{margin-top:10px;}
-  .title{
-    font-size:1em;font-weight:600;color:#f8fafc;
-    margin-bottom:4px;line-height:1.4;word-break:break-word;
-  }
-  .meta{
-    font-size:.85em;color:#94a3b8;word-break:break-word;
-  }
-  .open-btn,
-  .share-btn{
-    margin-top:10px;
-    border:none;
-    border-radius:8px;
-    padding:10px;
-    font-weight:500;
-    cursor:pointer;
-    transition:background .25s ease;
-    font-size:.95em;
-  }
-  .open-btn{
-    background:#60a5fa;color:#fff;
-  }
-  .open-btn:hover{background:#3b82f6;}
-  .share-btn{
-    background:#34d399;color:#fff;
-  }
-  .share-btn:hover{background:#10b981;}
-  .loader{
-    margin-top:60px;border:6px solid rgba(255,255,255,.2);
-    border-top:6px solid #60a5fa;border-radius:50%;
-    width:45px;height:45px;animation:spin 1s linear infinite;
-  }
-  @keyframes spin{
-    0%{transform:rotate(0);}100%{transform:rotate(360deg);}
-  }
-  footer{
-    margin-top:30px;color:#94a3b8;font-size:.9em;text-align:center;
-  }
-  /* ---------- Full‑screen viewer ---------- */
-  .pdf-viewer{
-    position:fixed;inset:0;background:#0f172a;
-    z-index:999;display:none;flex-direction:column;
-  }
-  .pdf-viewer.active{display:flex;}
-  .pdf-toolbar{
-    display:flex;justify-content:space-between;align-items:center;
-    padding:10px 14px;background:rgba(15,23,42,.9);
-    border-bottom:1px solid rgba(255,255,255,.1);
-  }
-  .pdf-toolbar h2{
-    font-size:1em;color:#93c5fd;font-weight:500;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%;
-  }
-  .close-full{
-    background:#ef4444;border:none;color:#fff;
-    font-size:1.2em;width:36px;height:36px;
-    border-radius:50%;cursor:pointer;transition:background .25s ease;
-  }
-  .close-full:hover{background:#dc2626;}
-  .pdf-content{
-    flex-grow:1;overflow:auto;touch-action:none;
-  }
-  .pdf-iframe{
-    width:100%;height:100%;border:none;display:block;
-  }
+:root{
+  --bg:#0f1724;
+  --card:#0b1220;
+  --muted:#9aa6b2;
+  --accent:#06b6d4;
+  --soft:#e6eef5;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  padding:0;
+  background:linear-gradient(180deg,#071025 0%, #071827 100%);
+  color:var(--soft);
+  font-family:Arial, Helvetica, sans-serif;
+}
+body{
+  padding:16px;
+  overflow-x:hidden;
+}
+
+/* ----- top notice ----- */
+.notice{
+  background:rgba(255,255,255,0.08);
+  border:1px solid var(--accent);
+  color:var(--soft);
+  text-align:center;
+  padding:8px;
+  margin-bottom:12px;
+  border-radius:8px;
+  font-size:14px;
+  font-weight:600;
+}
+
+/* Queue */
+.queue{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  overflow-y:auto;
+  max-height:100vh;
+}
+.queue-item{
+  background:rgba(255,255,255,0.05);
+  border-radius:10px;
+  padding:10px;
+  cursor:pointer;
+  transition:0.15s,opacity .3s ease-in;
+  opacity:0;
+}
+.queue-item.visible{opacity:1;}
+.queue-item.active{
+  border:1px solid var(--accent);
+  box-shadow:0 6px 20px rgba(6,182,212,.3);
+}
+.thumb{
+  width:100%;
+  aspect-ratio:16/9;
+  border-radius:8px;
+  background:#000;
+  overflow:hidden;
+  background-size:cover;
+  background-position:center;
+}
+.q-title{font-size:15px;font-weight:600;margin:6px 0 2px}
+.q-sub{font-size:12px;color:var(--muted)}
+.q-id{font-size:11px;color:var(--muted)}
+.q-link{font-size:12px;color:var(--soft);margin-top:4px}
+.q-link a{color:#4ecbff;text-decoration:none}
+.q-link a:hover{text-decoration:underline}
+
+/* “Share” button */
+.share-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin-left:8px;
+  padding:4px 8px;
+  font-size:13px;
+  font-weight:600;
+  color:#000;
+  background:var(--accent);
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  transition:background .2s;
+}
+.share-btn:hover{
+  background:#4ecbff;
+}
+
+/* Controls */
+.controls{
+  display:flex;
+  justify-content:center;
+  gap:12px;
+  padding:14px 0;
+  position:sticky;
+  bottom:10px;
+}
+.btn{
+  padding:8px 14px;
+  border-radius:8px;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.2);
+  color:var(--soft);
+  cursor:pointer;
+  font-size:14px;
+}
+.btn:hover{
+  background:var(--accent);
+  color:#000;
+}
+
+/* Loader */
+.loader{
+  text-align:center;
+  padding:20px;
+  color:var(--muted);
+  font-size:14px;
+}
+
+/* Mobile */
+@media (max-width:640px){
+  h1{font-size:1.8rem}
+  h2{font-size:1.25rem}
+  iframe{height:350px !important}
+}
 </style>
 </head>
 
 <body>
-<header>📚 Image Stream</header>
 
-<div id="feed"></div>
-<div id="loader" class="loader"></div>
+<!-- ----- highlighted notice ----- -->
+<div class="notice">
+  All content belongs to its respective owners. Credits to original creators.
+</div>
 
-<footer>© 2026 Powered by Archive &amp; Your Backend</footer>
+<!-- Queue container -->
+<div class="queue" id="queueList">
+  <div class="loader" id="loader">Loading videos...</div>
+</div>
 
-<!-- Fullscreen Image Viewer -->
-<div id="pdfViewer" class="pdf-viewer">
-  <div class="pdf-toolbar">
-    <h2 id="pdfTitle">Image Viewer</h2>
-    <button class="close-full" id="closeViewer">&times;</button>
-  </div>
-  <div class="pdf-content">
-    <iframe id="pdfFrame" class="pdf-iframe" src=""></iframe>
-  </div>
+<!-- Controls -->
+<div class="controls">
+  <button class="btn" id="prevBtn">Prev</button>
+  <button class="btn" id="nextBtn">Next</button>
 </div>
 
 <script>
-/* --------------------------------------------------------------
-   UI references
--------------------------------------------------------------- */
-const FEED        = document.getElementById('feed');
-const LOADER      = document.getElementById('loader');
-const VIEWER      = document.getElementById('pdfViewer');
-const PDF_FRAME   = document.getElementById('pdfFrame');
-const PDF_TITLE   = document.getElementById('pdfTitle');
-const CLOSE_VIEWER = document.getElementById('closeViewer');
-const PDF_CONTENT = document.querySelector('.pdf-content');
+/* -------------------------------------------------------------------------
+ *  Constants & small helpers
+ * ----------------------------------------------------------------------- */
+const BACKEND     = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
+const STORAGE_KEY = 'clicked_ids';
 
-/* --------------------------------------------------------------
-   Backend / paging
--------------------------------------------------------------- */
-const BACKEND_URL = 'https://images_displaying_backend.erenyeager6880.workers.dev';
-let allData = [], displayedCount = 0, loading = false;
-const BATCH_SIZE = 30;
+/* Page‑level metadata that must be part of every share */
+const PAGE_ID   = 1;
+const PAGE_NAME = 'free videos content';
 
-/* --------------------------------------------------------------
-   Helper – get a thumbnail URL from an Archive.org “details” link
--------------------------------------------------------------- */
-function getThumbnailUrl(item){
-  if (item.archive_url && item.archive_url.includes('archive.org/details/')){
-    const id = item.archive_url.split('/details/')[1]?.split(/[/?#]/)[0];
-    if (id) return `https://archive.org/services/img/${id}`;
-  }
-  return '';
-}
-
-/* --------------------------------------------------------------
-   Helper – get the *real* image URL (direct file if possible)
--------------------------------------------------------------- */
-function getFullImageUrl(item){
-  const url = (item.archive_url || '').trim();
-  const low = url.toLowerCase();
-
-  // Direct image file (.png/.jpg/.jpeg/.gif)
-  if (low.endsWith('.png') || low.endsWith('.jpg') || low.endsWith('.jpeg') || low.endsWith('.gif')) {
-    return url;
-  }
-
-  // Archive.org “details” page – try to compose a download URL.
-  // Most items store the primary file under the same identifier.
-  if (url.includes('archive.org/details/')) {
-    const id = url.split('/details/')[1]?.split(/[/?#]/)[0];
-    if (id) {
-      // Try a common naming pattern – the identifier followed by .jpg.
-      // If it does not exist the request will simply 404, and we’ll fall back.
-      return `https://archive.org/download/${id}/${id}.jpg`;
-    }
-  }
-
-  // Fallback: use the thumbnail (services/img) – it’s always available.
-  return getThumbnailUrl(item);
-}
-
-/* --------------------------------------------------------------
-   Fetch JSON data
--------------------------------------------------------------- */
-async function fetchData(){
+/* -------------------------------------------------------------------------
+ *  LocalStorage helpers
+ * ----------------------------------------------------------------------- */
+function getStoredIds(){
   try{
-    const res  = await fetch(BACKEND_URL);
-    const data = await res.json();
-    LOADER.style.display = 'none';
-    if (!data || !data.length){
-      FEED.innerHTML = "<p style='text-align:center;color:#94a3b8'>No Images found 😢</p>";
-      return;
-    }
-    allData = data;
+    const s = localStorage.getItem(STORAGE_KEY);
+    return s ? JSON.parse(s) : [];
+  }catch{ return []; }
+}
+function store(id){
+  const ids = new Set(getStoredIds());
+  ids.add(id);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify([...ids]));
+}
+function clearStored(){ localStorage.removeItem(STORAGE_KEY); }
+
+/* -------------------------------------------------------------------------
+ *  Send stored clicks to backend
+ * ----------------------------------------------------------------------- */
+async function sendStoredToBackend(){
+  const ids = getStoredIds();
+  if(!ids.length) return;
+  try{
+    await fetch(`${BACKEND}/clicked_videos`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({video_ids:ids})
+    });
+    console.log('Sent to backend:',ids);
+    clearStored();
+  }catch(e){ console.error('Failed to send ids',e); }
+}
+
+/* -------------------------------------------------------------------------
+ *  Load all videos once
+ * ----------------------------------------------------------------------- */
+const queueList = document.getElementById('queueList');
+const loader    = document.getElementById('loader');
+let videos = [], displayedCount = 0;
+const BATCH_SIZE = 30;
+let currentIndex = 0;
+
+async function loadVideos(){
+  loader.textContent = 'Fetching videos...';
+  try{
+    const res = await fetch(BACKEND);
+    videos = await res.json();
+    loader.remove();
     renderNextBatch();
-  }catch(e){
-    LOADER.style.display = 'none';
-    FEED.innerHTML = "<p style='text-align:center;color:#f87171'>Error loading data 😞</p>";
-    console.error(e);
+  }catch{
+    loader.textContent = '❌ Failed to load videos from backend';
   }
 }
 
-/* --------------------------------------------------------------
-   Render a batch of cards (30 at a time)
--------------------------------------------------------------- */
+/* -------------------------------------------------------------------------
+ *  Render next batch (30) of cards
+ * ----------------------------------------------------------------------- */
 function renderNextBatch(){
-  if (loading) return;
-  loading = true;
-  const batch = allData.slice(displayedCount, displayedCount + BATCH_SIZE);
-  batch.forEach((item,i)=>{
+  const batch = videos.slice(displayedCount, displayedCount+BATCH_SIZE);
+  displayedCount += batch.length;
+  batch.forEach((v,i)=>{
     const card = document.createElement('div');
-    card.className = 'card';
+    card.className = 'queue-item';
+    const absIdx = displayedCount - batch.length + i;
 
-    /* ----- thumbnail preview (with optional red “...” overlay) ----- */
-    const thumbUrl = getThumbnailUrl(item);
-    const preview = document.createElement('div');
-    preview.className = 'preview';
-    if (thumbUrl){
-      preview.innerHTML = `<img src="${thumbUrl}" alt="Thumbnail" loading="lazy">`;
-    }else{
-      preview.textContent = 'No Preview Available';
-    }
-    const wrapper = document.createElement('div');
-    wrapper.className = 'preview-wrapper';
-    wrapper.appendChild(preview);
-    const low = (item.archive_url||'').toLowerCase();
-    if (low.endsWith('.png') || low.endsWith('.jpg')){
-      const ellipsis = document.createElement('div');
-      ellipsis.className = 'ellipsis-overlay';
-      ellipsis.textContent = '...';
-      wrapper.appendChild(ellipsis);
-    }
-
-    /* ----- info block ----- */
-    const info = document.createElement('div');
-    info.className = 'info';
-    info.innerHTML = `
-      <div class="title">${item.title || 'Untitled Image'}</div>
-      <div class="meta">👤 ${item.username || 'Anonymous'} • 🆔 ${item.id || 'N/A'}</div>
+    card.innerHTML = `
+      <div class="thumb" style="background-image:url('${v.archive_org_iframe_image_link||""}')"></div>
+      <div class="q-title">${v.title||'Untitled'}</div>
+      <div class="q-sub">By ${v.username||'Unknown'}</div>
+      <div class="q-id">ID: ${v.id||'?'}</div>
+      <div class="q-link">Link 1: <a href="${v.link_1}" target="_blank">${v.link_1||'No link'}</a></div>
+      <div class="q-link">Link 2: <a href="${v.link_2}" target="_blank">${v.link_2||'No link'}</a></div>
+      <button class="share-btn" data-index="${absIdx}">Share</button>
     `;
 
-    /* ----- Share button ----- */
-    const shareBtn = document.createElement('button');
-    shareBtn.className = 'share-btn';
-    shareBtn.textContent = 'Share Image';
-    shareBtn.onclick = () => {
-      // Prevent double‑clicks while we download the image.
-      shareBtn.disabled = true;
-      const originalText = shareBtn.textContent;
-      shareBtn.textContent = 'Preparing…';
-
-      const imgUrl = getFullImageUrl(item);
-      downloadImageAsDataURL(imgUrl)
-        .then(dataUrl => {
-          // Build a safe filename – strip spaces/special chars.
-          const safeTitle = (item.title || 'shared_image')
-                            .replace(/[^\w\-]+/g,'_')
-                            .substring(0,30);
-          const fileName = safeTitle + '.jpg';
-          const titleForShare = item.title || 'Shared Image';
-          const extraText = '';   // you can add any extra text you like
-
-          if (window.Android && typeof window.Android.shareImage === 'function') {
-            window.Android.shareImage(dataUrl, fileName, titleForShare, extraText);
-          } else {
-            // Desktop fallback – just open the image in a new tab.
-            window.open(imgUrl, '_blank');
-            alert('Share is only available inside the Android app.');
-          }
-        })
-        .catch(err => {
-          console.error('Error preparing image for share:', err);
-          alert('Failed to prepare image for sharing.');
-        })
-        .finally(() => {
-          shareBtn.disabled = false;
-          shareBtn.textContent = originalText;
-        });
-    };
-
-    /* ----- Open button ----- */
-    const openBtn = document.createElement('button');
-    openBtn.className = 'open-btn';
-    openBtn.textContent = 'Open Image';
-    openBtn.onclick = () => openFullscreenImage(item.title, item.archive_url);
-
-    /* ----- assemble ----- */
-    // Order: preview → info → share → open
-    card.append(wrapper, info, shareBtn, openBtn);
-    FEED.appendChild(card);
+    // Click on the whole card → play video
+    card.onclick = () => playInline(absIdx);
+    queueList.appendChild(card);
     requestAnimationFrame(()=>card.classList.add('visible'));
   });
-  displayedCount += batch.length;
-  loading = false;
+
+  if(displayedCount >= videos.length){
+    const endMsg = document.createElement('div');
+    endMsg.className = 'loader';
+    endMsg.textContent = '🎉 All videos loaded';
+    queueList.appendChild(endMsg);
+  }
 }
 
-/* --------------------------------------------------------------
-   Infinite scroll
--------------------------------------------------------------- */
-window.addEventListener('scroll',()=>{
-  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200){
-    if (displayedCount < allData.length && !loading) renderNextBatch();
-  }
+/* -------------------------------------------------------------------------
+ *  Infinite scroll – load more when near bottom
+ * ----------------------------------------------------------------------- */
+queueList.addEventListener('scroll',()=>{
+  const nearBottom = queueList.scrollTop + queueList.clientHeight >= queueList.scrollHeight - 150;
+  if(nearBottom && displayedCount < videos.length) renderNextBatch();
 });
 
-/* --------------------------------------------------------------
-   Full‑screen viewer (pinch / mouse‑wheel zoom)
--------------------------------------------------------------- */
-let currentScale = 1;
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 5;
+/* -------------------------------------------------------------------------
+ *  Play an inline video (no ad checkpoint logic)
+ * ----------------------------------------------------------------------- */
+function playInline(idx){
+  currentIndex = idx;
+  const v = videos[idx];
+  const items = document.querySelectorAll('.queue-item');
 
-function applyScale(){
-  PDF_FRAME.style.transform = `scale(${currentScale})`;
-  PDF_FRAME.style.transformOrigin = '0 0';
-}
+  items.forEach((el,i)=>{
+    const isActive = i===idx;
+    el.classList.toggle('active',isActive);
+    const thumb = el.querySelector('.thumb');
 
-/* Open image in full‑screen viewer */
-function openFullscreenImage(title, archiveUrl){
-  if (!archiveUrl) return;
-  const embedUrl = archiveUrl.includes('archive.org')
-    ? archiveUrl.replace('/details/','/embed/')
-    : archiveUrl;
-  PDF_TITLE.textContent = title || 'Image Viewer';
-  PDF_FRAME.src = embedUrl;
-  VIEWER.classList.add('active');
-  currentScale = 1;
-  applyScale();
-}
-
-/* Close viewer */
-function closeViewer(){
-  VIEWER.classList.remove('active');
-  PDF_FRAME.src = '';
-  currentScale = 1;
-  applyScale();
-}
-CLOSE_VIEWER.onclick = closeViewer;
-document.addEventListener('keydown',e=>{
-  if (e.key === 'Escape') closeViewer();
-});
-
-/* ----- mouse‑wheel zoom ----- */
-PDF_CONTENT.addEventListener('wheel',e=>{
-  e.preventDefault();
-  const factor = e.deltaY < 0 ? 1.1 : 0.9;
-  const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, currentScale * factor));
-  if (newScale !== currentScale){
-    const rect = PDF_FRAME.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    const scrollL = PDF_CONTENT.scrollLeft;
-    const scrollT = PDF_CONTENT.scrollTop;
-    const ratio = newScale / currentScale;
-    currentScale = newScale;
-    applyScale();
-    PDF_CONTENT.scrollLeft = (cx + scrollL) * ratio - cx;
-    PDF_CONTENT.scrollTop  = (cy + scrollT) * ratio - cy;
-  }
-},{passive:false});
-
-/* ----- pinch‑zoom (touch) ----- */
-let pinchStartDist = null;
-let pinchStartScale = 1;
-function getDist(t1,t2){
-  const dx = t2.clientX - t1.clientX;
-  const dy = t2.clientY - t1.clientY;
-  return Math.hypot(dx,dy);
-}
-PDF_CONTENT.addEventListener('touchstart',e=>{
-  if (e.touches.length===2){
-    pinchStartDist = getDist(e.touches[0], e.touches[1]);
-    pinchStartScale = currentScale;
-    e.preventDefault();
-  }
-},{passive:false});
-
-PDF_CONTENT.addEventListener('touchmove',e=>{
-  if (e.touches.length===2 && pinchStartDist){
-    const curDist = getDist(e.touches[0], e.touches[1]);
-    const scaleFactor = curDist / pinchStartDist;
-    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, pinchStartScale * scaleFactor));
-    if (newScale !== currentScale){
-      currentScale = newScale;
-      applyScale();
+    if(isActive){
+      // remove the background image so the video isn’t covered by it
+      thumb.style.backgroundImage = '';
+      thumb.innerHTML = `
+        <video controls controlslist="nodownload" autoplay playsinline
+               style="width:100%;height:100%"
+               src="${v.mp4_link}"
+               poster="${v.archive_org_iframe_image_link}"></video>`;
+    }else{
+      // restore the thumbnail background when not active
+      thumb.innerHTML = '';
+      if(videos[i]) thumb.style.backgroundImage = `url('${videos[i].archive_org_iframe_image_link}')`;
     }
-    e.preventDefault();
-  }
-},{passive:false});
+  });
 
-PDF_CONTENT.addEventListener('touchend',e=>{
-  if (e.touches.length<2) pinchStartDist = null;
-});
+  // scroll newly‑active item into view
+  items[idx]?.scrollIntoView({behavior:'smooth',block:'center'});
 
-/* --------------------------------------------------------------
-   Utility – fetch an image and convert to Base64 data‑URL
--------------------------------------------------------------- */
-function downloadImageAsDataURL(url){
-  // The fetch must be allowed by CORS (Archive.org sends Access‑Control‑Allow‑Origin: *).
-  return fetch(url, {mode: 'cors'})
-    .then(resp => {
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      return resp.blob();
-    })
-    .then(blob => new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result); // result is a data:URL
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    }));
+  // store the click for analytics
+  if(v.id!=null) store(Number(v.id));
 }
 
-/* --------------------------------------------------------------
-   Kick‑off – fetch JSON data
--------------------------------------------------------------- */
-fetchData();
+/* -------------------------------------------------------------------------
+ *  Prev / Next buttons
+ * ----------------------------------------------------------------------- */
+document.getElementById('prevBtn').onclick = ()=>{
+  if(videos.length) playInline((currentIndex-1+videos.length)%videos.length);
+};
+document.getElementById('nextBtn').onclick = ()=>{
+  if(videos.length) playInline((currentIndex+1)%videos.length);
+};
+
+/* -------------------------------------------------------------------------
+ *  Share functionality – composite image
+ * ----------------------------------------------------------------------- */
+
+/**
+ * Build the plain‑text version used for the WhatsApp fallback.
+ */
+function buildShareText(video){
+  const title   = video.title   || 'Untitled video';
+  const vidId   = video.id ?? '-';
+  const user    = video.username || '-';
+  return `Page name: ${PAGE_NAME}
+Page ID: ${PAGE_ID}
+Video title: ${title}
+Video ID: ${vidId}
+Username: ${user}
+App name: YAN_1
+Developer: YAN`;
+}
+
+/**
+ * Create a single image that merges the thumbnail and the required information.
+ * Returns a Blob (image/jpeg).
+ */
+async function createCompositeImage(video){
+  const imgUrl = video.archive_org_iframe_image_link;
+  if(!imgUrl) throw new Error('No thumbnail URL');
+
+  // ----- load thumbnail (must be CORS‑enabled) -----
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.crossOrigin = 'anonymous';
+    i.onload  = () => resolve(i);
+    i.onerror = reject;
+    i.src = imgUrl;
+  });
+
+  // ----- calculate sizes -----
+  const MAX_WIDTH = 800;                     // never exceed this width
+  const scale     = Math.min(1, MAX_WIDTH / img.width);
+  const thumbW    = img.width  * scale;
+  const thumbH    = img.height * scale;
+
+  // ----- text that will appear under the thumbnail -----
+  const lines = [
+    `Page name: ${PAGE_NAME}`,
+    `Page ID: ${PAGE_ID}`,
+    `Video title: ${video.title || 'Untitled'}`,
+    `Video ID: ${video.id ?? '-'}`,
+    `Username: ${video.username || '-'}`,
+    `App name: YAN_1`,
+    `Developer: YAN`
+  ];
+
+  const padding    = 20;   // padding around the text block
+  const lineHeight = 28;   // vertical spacing per line
+  const textHeight = lines.length * lineHeight + padding;
+  const canvasW    = Math.round(thumbW);
+  const canvasH    = Math.round(thumbH + textHeight);
+
+  // ----- draw onto canvas -----
+  const canvas = document.createElement('canvas');
+  canvas.width  = canvasW;
+  canvas.height = canvasH;
+  const ctx = canvas.getContext('2d');
+
+  // white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0,0,canvasW,canvasH);
+
+  // thumbnail on top
+  ctx.drawImage(img, 0, 0, thumbW, thumbH);
+
+  // text under the thumbnail
+  ctx.fillStyle = '#333333';               // dark‑gray for good contrast
+  ctx.font = '20px Arial';
+  ctx.textBaseline = 'top';
+  const startY = thumbH + padding/2;
+  lines.forEach((txt, idx) => {
+    ctx.fillText(txt, padding, startY + idx * lineHeight);
+  });
+
+  // ----- export to Blob -----
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error('Canvas toBlob failed'));
+    }, 'image/jpeg', 0.92);
+  });
+}
+
+/**
+ * Share routine:
+ *   1️⃣ Try native Web‑Share API.
+ *   2️⃣ If that isn’t available (e.g. Android WebView), call the Android bridge.
+ *   3️⃣ If neither works, fall back to a WhatsApp text link.
+ */
+async function shareThumbnail(idx){
+  const video = videos[idx];
+  if(!video) return;
+
+  /* --------------------------------------------------------------
+   *  1️⃣ Try the native Web‑Share API (works on browsers)
+   * -------------------------------------------------------------- */
+  try{
+    if (navigator.canShare && navigator.canShare({files: []})){
+      const blob = await createCompositeImage(video);
+      const file = new File([blob], 'video-share.jpg', {type: blob.type});
+      if (navigator.share && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title: video.title || ''});
+        console.log('✅ shared via standard Web‑Share');
+        return;               // success – stop here
+      }
+    }
+  }catch(e){
+    console.warn('Web‑Share API not usable (expected in WebView)', e);
+  }
+
+  /* --------------------------------------------------------------
+   *  2️⃣ Android bridge – the only way to attach an image inside a WebView
+   * -------------------------------------------------------------- */
+  if (window.Android && typeof window.Android.shareImage === 'function'){
+    try{
+      const blob = await createCompositeImage(video);
+      const dataUrl = await new Promise((res,rej)=>{
+        const fr = new FileReader();
+        fr.onload  = () => res(fr.result);   // e.g. "data:image/jpeg;base64,…"
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+      const fileName = `video_${video.id ?? Date.now()}.jpg`;
+      const text     = buildShareText(video);
+      window.Android.shareImage(dataUrl, fileName, video.title||'Video', text);
+      console.log('✅ delegated share to Android bridge');
+      return;               // success – stop here
+    }catch(e){
+      console.error('Bridge share failed → fallback', e);
+    }
+  }
+
+  /* --------------------------------------------------------------
+   *  3️⃣ Final fallback – WhatsApp text‑only link
+   * -------------------------------------------------------------- */
+  const wa = `https://api.whatsapp.com/send?text=${encodeURIComponent(buildShareText(video))}`;
+  window.open(wa, '_blank');
+}
+
+/* Delegated click listener – catches clicks on any .share‑btn inside the queue */
+queueList.addEventListener('click', e => {
+  const btn = e.target.closest('.share-btn');
+  if (!btn) return;               // not a share button
+  e.stopPropagation();            // prevent the card click → play video
+
+  const idx = Number(btn.dataset.index);
+  if (!Number.isNaN(idx)){
+    shareThumbnail(idx);
+  }
+});
+
+/* -------------------------------------------------------------------------
+ *  Initialise app
+ * ----------------------------------------------------------------------- */
+window.addEventListener('load', async ()=>{
+  // send any stored click‑ids (analytics)
+  await sendStoredToBackend();
+
+  // load the video list
+  await loadVideos();
+});
 </script>
+
 </body>
 </html>
