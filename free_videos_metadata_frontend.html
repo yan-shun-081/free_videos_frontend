@@ -131,6 +131,18 @@
     .details{margin-top:8px;font-size:14px;line-height:1.5;word-wrap:break-word}
     .details a{color:var(--accent);text-decoration:none;word-break:break-all}
     .details a:hover{text-decoration:underline}
+    .share-btn{
+      margin-top:8px;
+      padding:8px 12px;
+      border-radius:8px;
+      background:var(--accent);
+      color:#062235;
+      border:none;
+      cursor:pointer;
+      font-weight:600;
+      transition:0.2s;
+    }
+    .share-btn:hover{opacity:0.9}
     footer{display:none}
     @media (max-width:768px){
       body{padding:12px}
@@ -221,7 +233,13 @@
     /* -------------------- Constants -------------------- */
     const BACKEND_UPLOAD = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/upload';
     const BACKEND_SEARCH = 'https://free_videos_metadata_backend.ajaia-backend.workers.dev/search';
-    const STORAGE_KEY = 'watched_videos';
+    const STORAGE_KEY    = 'watched_videos';
+    const PAGE_ID        = 1;
+    const PAGE_NAME      = 'free videos content';
+
+    /* -------------------- Global State -------------------- */
+    // Holds the videos returned by the latest search (so we can reference them later)
+    let searchVideos = [];
 
     /* -------------------- Helper Functions -------------------- */
     function extractArchiveId(input) {
@@ -293,11 +311,11 @@
 
       const archiveVideo = document.getElementById('archiveVideo').value.trim();
       const archiveImage = document.getElementById('archiveImage').value.trim();
-      const title = document.getElementById('title').value.trim();
-      const link1 = document.getElementById('link1').value.trim();
-      const link2 = document.getElementById('link2').value.trim();
-      const username = document.getElementById('username').value.trim();
-      const phone = document.getElementById('phone').value.trim();
+      const title        = document.getElementById('title').value.trim();
+      const link1        = document.getElementById('link1').value.trim();
+      const link2        = document.getElementById('link2').value.trim();
+      const username     = document.getElementById('username').value.trim();
+      const phone        = document.getElementById('phone').value.trim();
 
       if (![archiveVideo, archiveImage, title, link1, link2, username, phone].every(Boolean)) {
         return status.innerHTML = '<span class="error">All fields required.</span>';
@@ -339,20 +357,22 @@
       const q = document.getElementById('globalSearch').value.trim();
       const resultsDiv = document.getElementById('searchResults');
       if (!q) return alert('Type id/title/username to search.');
-      resultsDiv.innerHTML = '<div class="small">Searching...</div>';
+      resultsDiv.innerHTML = '<div class="small">Searching…</div>';
 
       try {
         const res = await fetch(`${BACKEND_SEARCH}?search=${encodeURIComponent(q)}`);
         if (!res.ok) throw new Error('Search failed');
         const data = await res.json();
         const videos = Array.isArray(data) ? data : (data.id ? [data] : []);
+        searchVideos = videos;   // keep for the share button handler
 
         if (videos.length === 0) {
           resultsDiv.innerHTML = '<div class="small">No results found.</div>';
           return;
         }
 
-        resultsDiv.innerHTML = videos.map(v => `
+        // Build HTML for each result
+        resultsDiv.innerHTML = videos.map((v,i) => `
           <div class="search-item">
             <div class="thumb" id="thumb-${v.id}">
               <img src="${v.archive_org_iframe_image_link}" alt="Thumbnail" />
@@ -374,16 +394,16 @@
               <strong>Link 2:</strong> <a href="${v.link_2}" target="_blank">${v.link_2}</a><br>
               <strong>Username:</strong> ${v.username}
             </div>
+            <button class="share-btn" data-index="${i}">Share</button>
           </div>
         `).join('');
 
-        // Attach interactions for each result
+        // Attach thumbnail‑click & video‑play logic (unchanged)
         videos.forEach(v => {
           const thumb   = document.getElementById(`thumb-${v.id}`);
           const videoCt = document.getElementById(`video-${v.id}`);
           const video   = videoCt.querySelector('video');
 
-          // Show video on thumbnail click
           thumb.addEventListener('click', () => {
             document.querySelectorAll('.search-item .video')
                     .forEach(c => c.style.display = 'none');
@@ -393,7 +413,6 @@
             videoCt.style.display = 'block';
           });
 
-          // Pause other videos when this one starts playing
           video.addEventListener('play', () => {
             document.querySelectorAll('video').forEach(vid => {
               if (vid !== video) {
@@ -406,7 +425,6 @@
             });
           });
 
-          // Store video ID for analytics when playback starts
           video.addEventListener('playing', () => storeVideoId(v.id));
         });
 
@@ -415,13 +433,125 @@
       }
     });
 
-    // Global listener – store video ID for any video element that plays
+    // Global listener – store any video ID that starts playing (covers also preview video)
     document.addEventListener('play', e => {
       if (e.target && e.target.tagName === 'VIDEO') {
         const vid = e.target.getAttribute('data-video-id') || e.target.src || null;
         if (vid) storeVideoId(vid);
       }
     }, true);
+
+    /* -----------------------------------------------------------------
+     *   Composite image creation (thumbnail + required text)
+     * ----------------------------------------------------------------- */
+    async function createCompositeImage(video){
+      const imgUrl = video.archive_org_iframe_image_link;
+      if(!imgUrl) throw new Error('No thumbnail URL');
+
+      // Load thumbnail (needs CORS‑enabled source)
+      const img = await new Promise((resolve,reject)=>{
+        const i = new Image();
+        i.crossOrigin = 'anonymous';
+        i.onload  = () => resolve(i);
+        i.onerror = reject;
+        i.src = imgUrl;
+      });
+
+      // Size the thumbnail (max width 800 px)
+      const MAX_WIDTH = 800;
+      const scale = Math.min(1, MAX_WIDTH / img.width);
+      const thumbW = img.width  * scale;
+      const thumbH = img.height * scale;
+
+      // Text lines that go under the thumbnail
+      const lines = [
+        `Page name: ${PAGE_NAME}`,
+        `Page ID: ${PAGE_ID}`,
+        `Video title: ${video.title || 'Untitled'}`,
+        `Video ID: ${video.id ?? '-'}`,
+        `Username: ${video.username || '-'}`,
+        `App name: YAN_1`,
+        `Developer: YAN`
+      ];
+
+      const padding    = 20;               // space around the text block
+      const lineHeight = 28;               // line height in px
+      const textHeight = lines.length * lineHeight + padding;
+      const canvasW = Math.round(thumbW);
+      const canvasH = Math.round(thumbH + textHeight);
+
+      // Draw thumbnail + text onto a canvas
+      const canvas = document.createElement('canvas');
+      canvas.width  = canvasW;
+      canvas.height = canvasH;
+      const ctx = canvas.getContext('2d');
+
+      // white background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0,0,canvasW,canvasH);
+
+      // thumbnail
+      ctx.drawImage(img, 0, 0, thumbW, thumbH);
+
+      // text under the thumbnail
+      ctx.fillStyle = '#333333';
+      ctx.font = '20px Arial';
+      ctx.textBaseline = 'top';
+      const startY = thumbH + padding/2;
+      lines.forEach((txt, idx) => {
+        ctx.fillText(txt, padding, startY + idx * lineHeight);
+      });
+
+      // Export to Blob (JPEG)
+      return new Promise((resolve,reject)=>{
+        canvas.toBlob(blob => {
+          if (blob) resolve(blob);
+          else reject(new Error('Canvas toBlob failed'));
+        }, 'image/jpeg', 0.92);
+      });
+    }
+
+    /* -----------------------------------------------------------------
+     *   Share a single video (image + WhatsApp fallback)
+     * ----------------------------------------------------------------- */
+    async function shareVideo(video){
+      // 1️⃣ Try native Web‑Share (mobile browsers)
+      try{
+        if (navigator.canShare && navigator.canShare({files: []})){
+          const blob = await createCompositeImage(video);
+          const file = new File([blob], 'video-share.jpg', {type: blob.type});
+          if (navigator.share && navigator.canShare({files:[file]})){
+            await navigator.share({files:[file], title: video.title || ''});
+            console.log('✅ shared via native Web‑Share');
+            return;
+          }
+        }
+      }catch(e){
+        console.warn('Web‑Share API not usable', e);
+      }
+
+      // 2️⃣ WhatsApp text fallback (always works)
+      const waText = `Page name: ${PAGE_NAME}
+Page ID: ${PAGE_ID}
+Video title: ${video.title || '-'}
+Video ID: ${video.id ?? '-'}
+Username: ${video.username || '-'}
+App name: YAN_1
+Developer: YAN`;
+      const waLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(waText)}`;
+      window.open(waLink, '_blank');
+    }
+
+    // Delegated click listener for Share buttons inside the search results
+    document.getElementById('searchResults').addEventListener('click', e => {
+      const btn = e.target.closest('.share-btn');
+      if (!btn) return;
+      const idx = Number(btn.dataset.index);
+      if (!isNaN(idx) && searchVideos[idx]) {
+        shareVideo(searchVideos[idx]);
+      }
+    });
+
   </script>
 </body>
 </html>
