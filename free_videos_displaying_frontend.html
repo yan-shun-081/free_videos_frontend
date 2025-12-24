@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -24,19 +23,6 @@ html,body{
 body{
   padding:16px;
   overflow-x:hidden;
-}
-
-/* ----- top notice ----- */
-.notice{
-  background:rgba(255,255,255,0.08);
-  border:1px solid var(--accent);
-  color:var(--soft);
-  text-align:center;
-  padding:8px;
-  margin-bottom:12px;
-  border-radius:8px;
-  font-size:14px;
-  font-weight:600;
 }
 
 /* Queue */
@@ -76,24 +62,20 @@ body{
 .q-link a{color:#4ecbff;text-decoration:none}
 .q-link a:hover{text-decoration:underline}
 
-/* “Share” button */
+/* Share button */
 .share-btn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  margin-left:8px;
+  margin-top:6px;
   padding:4px 8px;
-  font-size:13px;
-  font-weight:600;
-  color:#000;
-  background:var(--accent);
-  border:none;
+  font-size:12px;
   border-radius:6px;
+  background:rgba(255,255,255,0.1);
+  border:1px solid rgba(255,255,255,0.2);
+  color:var(--soft);
   cursor:pointer;
-  transition:background .2s;
 }
 .share-btn:hover{
-  background:#4ecbff;
+  background:var(--accent);
+  color:#000;
 }
 
 /* Controls */
@@ -138,11 +120,6 @@ body{
 
 <body>
 
-<!-- ----- highlighted notice ----- -->
-<div class="notice">
-  All content belongs to its respective owners. Credits to original creators.
-</div>
-
 <!-- Queue container -->
 <div class="queue" id="queueList">
   <div class="loader" id="loader">Loading videos...</div>
@@ -160,10 +137,7 @@ body{
  * ----------------------------------------------------------------------- */
 const BACKEND     = 'https://free_videos_displaying_backend.ajaia-backend.workers.dev';
 const STORAGE_KEY = 'clicked_ids';
-
-/* Page‑level metadata that must be part of every share */
-const PAGE_ID   = 1;
-const PAGE_NAME = 'free videos content';
+const BATCH_SIZE  = 30;
 
 /* -------------------------------------------------------------------------
  *  LocalStorage helpers
@@ -182,7 +156,7 @@ function store(id){
 function clearStored(){ localStorage.removeItem(STORAGE_KEY); }
 
 /* -------------------------------------------------------------------------
- *  Send stored clicks to backend
+ *  Send stored clicks to backend (analytics)
  * ----------------------------------------------------------------------- */
 async function sendStoredToBackend(){
   const ids = getStoredIds();
@@ -193,42 +167,72 @@ async function sendStoredToBackend(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({video_ids:ids})
     });
-    console.log('Sent to backend:',ids);
+    console.log('Sent analytics IDs:',ids);
     clearStored();
-  }catch(e){ console.error('Failed to send ids',e); }
+  }catch(e){
+    console.error('Failed to send analytics IDs',e);
+  }
 }
 
 /* -------------------------------------------------------------------------
- *  Load all videos once
+ *  Slugify – converts a title into a URL‑friendly string
+ * ----------------------------------------------------------------------- */
+function slugify(str){
+  return String(str || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g,'')          // remove non‑word chars
+    .replace(/[\s_-]+/g,'-')          // collapse whitespace & underscores
+    .replace(/^-+|-+$/g,'');          // trim leading/trailing hyphens
+}
+
+/* -------------------------------------------------------------------------
+ *  Global state
  * ----------------------------------------------------------------------- */
 const queueList = document.getElementById('queueList');
 const loader    = document.getElementById('loader');
 let videos = [], displayedCount = 0;
-const BATCH_SIZE = 30;
 let currentIndex = 0;
 
+/* -------------------------------------------------------------------------
+ *  Load videos from the backend (once)
+ * ----------------------------------------------------------------------- */
 async function loadVideos(){
   loader.textContent = 'Fetching videos...';
   try{
-    const res = await fetch(BACKEND);
-    videos = await res.json();
+    const res   = await fetch(BACKEND);
+    videos      = await res.json();
     loader.remove();
+
+    // render the first batch (so that UI is not empty)
     renderNextBatch();
+
+    // If there is a video_id in the URL, navigate to it
+    const urlParams = new URLSearchParams(window.location.search);
+    const videoId   = urlParams.get('video_id');
+    if(videoId){
+      const targetIdx = videos.findIndex(v => String(v.id) === videoId);
+      if(targetIdx !== -1){
+        // make sure the card exists (render enough batches)
+        renderBatchesUpTo(targetIdx);
+        // wait a tick for the DOM to be ready, then play it
+        setTimeout(()=>playInline(targetIdx), 0);
+      }
+    }
   }catch{
     loader.textContent = '❌ Failed to load videos from backend';
   }
 }
 
 /* -------------------------------------------------------------------------
- *  Render next batch (30) of cards
+ *  Render a batch (default 30) of video cards
  * ----------------------------------------------------------------------- */
 function renderNextBatch(){
-  const batch = videos.slice(displayedCount, displayedCount+BATCH_SIZE);
-  displayedCount += batch.length;
+  const batch = videos.slice(displayedCount, displayedCount + BATCH_SIZE);
   batch.forEach((v,i)=>{
-    const card = document.createElement('div');
+    const card   = document.createElement('div');
     card.className = 'queue-item';
-    const absIdx = displayedCount - batch.length + i;
+    const absIdx = displayedCount + i;   // absolute index in the whole array
 
     card.innerHTML = `
       <div class="thumb" style="background-image:url('${v.archive_org_iframe_image_link||""}')"></div>
@@ -237,15 +241,26 @@ function renderNextBatch(){
       <div class="q-id">ID: ${v.id||'?'}</div>
       <div class="q-link">Link 1: <a href="${v.link_1}" target="_blank">${v.link_1||'No link'}</a></div>
       <div class="q-link">Link 2: <a href="${v.link_2}" target="_blank">${v.link_2||'No link'}</a></div>
-      <button class="share-btn" data-index="${absIdx}">Share</button>
+      <button class="share-btn">Share</button>
     `;
 
-    // Click on the whole card → play video
+    // clicking the whole card → play video
     card.onclick = () => playInline(absIdx);
+
+    // share button handling (stop propagation so we don’t also play)
+    const shareBtn = card.querySelector('.share-btn');
+    shareBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const link = `${window.location.origin}/${slugify(v.title)}?video_id=${encodeURIComponent(v.id)}`;
+      copyToClipboard(link);
+    });
+
     queueList.appendChild(card);
     requestAnimationFrame(()=>card.classList.add('visible'));
   });
+  displayedCount += batch.length;
 
+  // All videos loaded → give a friendly end‑message
   if(displayedCount >= videos.length){
     const endMsg = document.createElement('div');
     endMsg.className = 'loader';
@@ -255,15 +270,26 @@ function renderNextBatch(){
 }
 
 /* -------------------------------------------------------------------------
- *  Infinite scroll – load more when near bottom
+ *  Render enough batches so that a given index exists in the DOM
+ * ----------------------------------------------------------------------- */
+function renderBatchesUpTo(targetIdx){
+  while(displayedCount <= targetIdx && displayedCount < videos.length){
+    renderNextBatch();
+  }
+}
+
+/* -------------------------------------------------------------------------
+ *  Infinite scroll – load more when scrolling near the bottom
  * ----------------------------------------------------------------------- */
 queueList.addEventListener('scroll',()=>{
   const nearBottom = queueList.scrollTop + queueList.clientHeight >= queueList.scrollHeight - 150;
-  if(nearBottom && displayedCount < videos.length) renderNextBatch();
+  if(nearBottom && displayedCount < videos.length){
+    renderNextBatch();
+  }
 });
 
 /* -------------------------------------------------------------------------
- *  Play an inline video (no ad checkpoint logic)
+ *  Play a video inline (replaces thumbnail with <video>)
  * ----------------------------------------------------------------------- */
 function playInline(idx){
   currentIndex = idx;
@@ -272,11 +298,11 @@ function playInline(idx){
 
   items.forEach((el,i)=>{
     const isActive = i===idx;
-    el.classList.toggle('active',isActive);
+    el.classList.toggle('active', isActive);
     const thumb = el.querySelector('.thumb');
 
     if(isActive){
-      // remove the background image so the video isn’t covered by it
+      // replace thumbnail with video element
       thumb.style.backgroundImage = '';
       thumb.innerHTML = `
         <video controls controlslist="nodownload" autoplay playsinline
@@ -284,21 +310,21 @@ function playInline(idx){
                src="${v.mp4_link}"
                poster="${v.archive_org_iframe_image_link}"></video>`;
     }else{
-      // restore the thumbnail background when not active
+      // restore thumbnail background
       thumb.innerHTML = '';
       if(videos[i]) thumb.style.backgroundImage = `url('${videos[i].archive_org_iframe_image_link}')`;
     }
   });
 
-  // scroll newly‑active item into view
+  // Smooth‑scroll the active card into view
   items[idx]?.scrollIntoView({behavior:'smooth',block:'center'});
 
-  // store the click for analytics
-  if(v.id!=null) store(Number(v.id));
+  // Record the click for analytics
+  if(v.id != null) store(Number(v.id));
 }
 
 /* -------------------------------------------------------------------------
- *  Prev / Next buttons
+ *  Prev / Next navigation buttons
  * ----------------------------------------------------------------------- */
 document.getElementById('prevBtn').onclick = ()=>{
   if(videos.length) playInline((currentIndex-1+videos.length)%videos.length);
@@ -308,172 +334,40 @@ document.getElementById('nextBtn').onclick = ()=>{
 };
 
 /* -------------------------------------------------------------------------
- *  Share functionality – composite image
+ *  Clipboard helper – tries the modern API, falls back to a textarea hack
  * ----------------------------------------------------------------------- */
-
-/**
- * Build the plain‑text version used for the WhatsApp fallback.
- */
-function buildShareText(video){
-  const title   = video.title   || 'Untitled video';
-  const vidId   = video.id ?? '-';
-  const user    = video.username || '-';
-  return `Page name: ${PAGE_NAME}
-Page ID: ${PAGE_ID}
-Video title: ${title}
-Video ID: ${vidId}
-Username: ${user}
-App name: YAN_1
-Developer: YAN`;
+function copyToClipboard(text){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text)
+      .then(()=>alert('Share link copied to clipboard!'))
+      .catch(()=>fallbackCopy(text));
+  }else{
+    fallbackCopy(text);
+  }
 }
-
-/**
- * Create a single image that merges the thumbnail and the required information.
- * Returns a Blob (image/jpeg).
- */
-async function createCompositeImage(video){
-  const imgUrl = video.archive_org_iframe_image_link;
-  if(!imgUrl) throw new Error('No thumbnail URL');
-
-  // ----- load thumbnail (must be CORS‑enabled) -----
-  const img = await new Promise((resolve, reject) => {
-    const i = new Image();
-    i.crossOrigin = 'anonymous';
-    i.onload  = () => resolve(i);
-    i.onerror = reject;
-    i.src = imgUrl;
-  });
-
-  // ----- calculate sizes -----
-  const MAX_WIDTH = 800;                     // never exceed this width
-  const scale     = Math.min(1, MAX_WIDTH / img.width);
-  const thumbW    = img.width  * scale;
-  const thumbH    = img.height * scale;
-
-  // ----- text that will appear under the thumbnail -----
-  const lines = [
-    `Page name: ${PAGE_NAME}`,
-    `Page ID: ${PAGE_ID}`,
-    `Video title: ${video.title || 'Untitled'}`,
-    `Video ID: ${video.id ?? '-'}`,
-    `Username: ${video.username || '-'}`,
-    `App name: YAN_1`,
-    `Developer: YAN`
-  ];
-
-  const padding    = 20;   // padding around the text block
-  const lineHeight = 28;   // vertical spacing per line
-  const textHeight = lines.length * lineHeight + padding;
-  const canvasW    = Math.round(thumbW);
-  const canvasH    = Math.round(thumbH + textHeight);
-
-  // ----- draw onto canvas -----
-  const canvas = document.createElement('canvas');
-  canvas.width  = canvasW;
-  canvas.height = canvasH;
-  const ctx = canvas.getContext('2d');
-
-  // white background
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0,0,canvasW,canvasH);
-
-  // thumbnail on top
-  ctx.drawImage(img, 0, 0, thumbW, thumbH);
-
-  // text under the thumbnail
-  ctx.fillStyle = '#333333';               // dark‑gray for good contrast
-  ctx.font = '20px Arial';
-  ctx.textBaseline = 'top';
-  const startY = thumbH + padding/2;
-  lines.forEach((txt, idx) => {
-    ctx.fillText(txt, padding, startY + idx * lineHeight);
-  });
-
-  // ----- export to Blob -----
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(blob => {
-      if (blob) resolve(blob);
-      else reject(new Error('Canvas toBlob failed'));
-    }, 'image/jpeg', 0.92);
-  });
-}
-
-/**
- * Share routine:
- *   1️⃣ Try native Web‑Share API.
- *   2️⃣ If that isn’t available (e.g. Android WebView), call the Android bridge.
- *   3️⃣ If neither works, fall back to a WhatsApp text link.
- */
-async function shareThumbnail(idx){
-  const video = videos[idx];
-  if(!video) return;
-
-  /* --------------------------------------------------------------
-   *  1️⃣ Try the native Web‑Share API (works on browsers)
-   * -------------------------------------------------------------- */
+function fallbackCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; // avoid scrolling to bottom
+  document.body.appendChild(ta);
+  ta.select();
   try{
-    if (navigator.canShare && navigator.canShare({files: []})){
-      const blob = await createCompositeImage(video);
-      const file = new File([blob], 'video-share.jpg', {type: blob.type});
-      if (navigator.share && navigator.canShare({files:[file]})){
-        await navigator.share({files:[file], title: video.title || ''});
-        console.log('✅ shared via standard Web‑Share');
-        return;               // success – stop here
-      }
-    }
-  }catch(e){
-    console.warn('Web‑Share API not usable (expected in WebView)', e);
+    document.execCommand('copy');
+    alert('Share link copied to clipboard!');
+  }catch{
+    prompt('Copy the link manually:', text);
   }
-
-  /* --------------------------------------------------------------
-   *  2️⃣ Android bridge – the only way to attach an image inside a WebView
-   * -------------------------------------------------------------- */
-  if (window.Android && typeof window.Android.shareImage === 'function'){
-    try{
-      const blob = await createCompositeImage(video);
-      const dataUrl = await new Promise((res,rej)=>{
-        const fr = new FileReader();
-        fr.onload  = () => res(fr.result);   // e.g. "data:image/jpeg;base64,…"
-        fr.onerror = rej;
-        fr.readAsDataURL(blob);
-      });
-      const fileName = `video_${video.id ?? Date.now()}.jpg`;
-      const text     = buildShareText(video);
-      window.Android.shareImage(dataUrl, fileName, video.title||'Video', text);
-      console.log('✅ delegated share to Android bridge');
-      return;               // success – stop here
-    }catch(e){
-      console.error('Bridge share failed → fallback', e);
-    }
-  }
-
-  /* --------------------------------------------------------------
-   *  3️⃣ Final fallback – WhatsApp text‑only link
-   * -------------------------------------------------------------- */
-  const wa = `https://api.whatsapp.com/send?text=${encodeURIComponent(buildShareText(video))}`;
-  window.open(wa, '_blank');
+  document.body.removeChild(ta);
 }
-
-/* Delegated click listener – catches clicks on any .share‑btn inside the queue */
-queueList.addEventListener('click', e => {
-  const btn = e.target.closest('.share-btn');
-  if (!btn) return;               // not a share button
-  e.stopPropagation();            // prevent the card click → play video
-
-  const idx = Number(btn.dataset.index);
-  if (!Number.isNaN(idx)){
-    shareThumbnail(idx);
-  }
-});
 
 /* -------------------------------------------------------------------------
- *  Initialise app
+ *  Initialise the app
  * ----------------------------------------------------------------------- */
 window.addEventListener('load', async ()=>{
-  // send any stored click‑ids (analytics)
+  // 1️⃣ Send any stored click‑ids (analytics)
   await sendStoredToBackend();
 
-  // load the video list
+  // 2️⃣ Load the video catalog
   await loadVideos();
 });
 </script>
